@@ -1,0 +1,3 @@
+[submodule "bioparser"]
+	path = submodules/bioparser
+	url = git@github.com:rvaser/bioparser.git
