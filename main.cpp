@@ -79,6 +79,38 @@ map<string, double> get_distribution_vector(const unique_ptr<Sequence>& fragment
     return kmer_counts;
 }
 
+double get_cosinus_similarity(std::map<std::string, double> vector1, std::map<std::string, double> vector2) {
+    double dot_product = 0.0;
+    double norm1 = 0.0;
+    double norm2 = 0.0;
+
+    for (const auto& pair : vector1) {
+        const auto& key = pair.first;
+        const auto& value1 = pair.second;
+
+        double value2 = 0.0;
+        if (vector2.count(key) > 0) {
+            value2 = vector2[key];
+        }
+
+        dot_product += value1 * value2;
+        norm1 += value1 * value1;
+    }
+
+    for (const auto& pair : vector2) {
+        const auto& value2 = pair.second;
+        norm2 += value2 * value2;
+    }
+
+    norm1 = std::sqrt(norm1);
+    norm2 = std::sqrt(norm2);
+
+    if (norm1 == 0.0 || norm2 == 0.0) {
+        throw std::invalid_argument("Norma jednog od vektora je 0, kosinusna sličnost nije definirana.");
+    }
+
+    return dot_product / (norm1 * norm2);
+}
 
 
 int main(){
