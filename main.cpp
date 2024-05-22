@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <functional> // for std::reference_wrapper
 #include "bioparser/fasta_parser.hpp" 
+
 using namespace std;
 
  class Sequence  //prema  uputama za korištenje bioparser modula https://github.com/rvaser/bioparser
@@ -63,13 +64,13 @@ vector<double> get_distribution_vector(const unique_ptr<Sequence>& fragment, int
     string name = fragment->name_;
     uint64_t length;
     if(referent==false){
-        length = sequence_length(name);       
+        length = sequence_length(name);
+        length = (int) length;       
     }
     else{
         length = fragment->data_.size();
     }
     length = length - k + 1;
-    //cout<<length<<endl;
     map<string, double> kmer_counts;
     string sequence = fragment->data_;
     vector<double> distribution_vector;
@@ -106,6 +107,7 @@ vector<double> get_distribution_vector(const unique_ptr<Sequence>& fragment, int
             kmer = base + kmer;
             x /= 4;
         }
+
         distribution_vector.push_back(kmer_counts[kmer]);
     }
 
@@ -149,6 +151,7 @@ map<string, double> get_distribution_vector_map(const unique_ptr<Sequence>& frag
 
 void write_csv(const vector<reference_wrapper<vector<double>>>& references_to_distribution_vectors, const vector<string>& names, const string& filename) {
     if (references_to_distribution_vectors.size() != names.size()) {
+        printf("Velicina vektora referenci je %d,a velicina vektora imena je %d\n",(int)references_to_distribution_vectors.size(),(int)names.size());
         throw runtime_error("Veličina vektora referenci i vektora imena se ne podudara.");
     }
     
@@ -167,12 +170,11 @@ void write_csv(const vector<reference_wrapper<vector<double>>>& references_to_di
     file << "\n";
     
     // Write the data
-    size_t length = references_to_distribution_vectors[0].get().size();
-    for (size_t i = 0; i < length; i++) {
-        for (size_t j = 0; j < references_to_distribution_vectors.size(); j++) {
-            if (i < references_to_distribution_vectors[j].get().size()) {
-                file << references_to_distribution_vectors[j].get()[i];
-            }
+    size_t length = references_to_distribution_vectors[0].get().size();//to je broj redaka
+
+    for (size_t i = 0; i < length; i++) { //redak
+        for (size_t j = 0; j < references_to_distribution_vectors.size(); j++) { //stupac           
+                file << references_to_distribution_vectors[j].get()[i];         
             if (j != references_to_distribution_vectors.size() - 1) {
                 file << ",";
             }
@@ -308,7 +310,7 @@ int main(){
     vector<double> ref_distribution_vector9;
     vector<double> ref_distribution_vector10;
 
-    int k = 3;
+    int k = 2;
 
     ref_distribution_vector1 = get_distribution_vector(ref(ref1[0]),k,true); //koristim referencu da izbjegnem kopiranje podataka)
     ref_distribution_vector2 = get_distribution_vector(ref(ref2[0]),k,true);
@@ -323,40 +325,78 @@ int main(){
 
 
     // Stvaranje vektora referenci
-vector<reference_wrapper<vector<double>>> references_to_distribution_vectors;
+    vector<reference_wrapper<vector<double>>> references_to_distribution_vectors;
 
-// Dodavanje referenci na distribucijske vektore
-references_to_distribution_vectors.push_back(ref_distribution_vector1);
-references_to_distribution_vectors.push_back(ref_distribution_vector2);
-references_to_distribution_vectors.push_back(ref_distribution_vector3);
-references_to_distribution_vectors.push_back(ref_distribution_vector4);
-references_to_distribution_vectors.push_back(ref_distribution_vector5);
-references_to_distribution_vectors.push_back(ref_distribution_vector6);
-references_to_distribution_vectors.push_back(ref_distribution_vector7);
-references_to_distribution_vectors.push_back(ref_distribution_vector8);
-references_to_distribution_vectors.push_back(ref_distribution_vector9);
-references_to_distribution_vectors.push_back(ref_distribution_vector10);
+    // Dodavanje referenci na distribucijske vektore
+    references_to_distribution_vectors.push_back(ref_distribution_vector1);
+    references_to_distribution_vectors.push_back(ref_distribution_vector2);
+    references_to_distribution_vectors.push_back(ref_distribution_vector3);
+    references_to_distribution_vectors.push_back(ref_distribution_vector4);
+    references_to_distribution_vectors.push_back(ref_distribution_vector5);
+    references_to_distribution_vectors.push_back(ref_distribution_vector6);
+    references_to_distribution_vectors.push_back(ref_distribution_vector7);
+    references_to_distribution_vectors.push_back(ref_distribution_vector8);
+    references_to_distribution_vectors.push_back(ref_distribution_vector9);
+    references_to_distribution_vectors.push_back(ref_distribution_vector10);
 
-// Nazivi bakterija
-vector<string> names = {
+    // Nazivi bakterija
+    vector<string> names = {
         "b. cereus", "e. coli", "h. influenzae", "h. pylori", "l. spiritensis",
         "p. vulgaris", "p. aeruginosa", "s. enterica", "s. pneumoniae", "t. praeacuta"
     };
 
 
-//ispis u csv datoteku
-string filename = "reference_vectors.csv";
-string absolute_path = get_data_directory() + "/" + filename;
-write_csv(references_to_distribution_vectors, names, absolute_path);
+    //ispis u csv datoteku
+    string filename = "reference_vectors.csv";
+    string absolute_path = get_data_directory() + "/" + filename;
+    write_csv(references_to_distribution_vectors, names, absolute_path);
 
-//----parsiranje očitanja-----------------------------------------
-auto fragment_parser =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/NCTC4450.fasta");
-auto fragments = fragment_parser->Parse(-1); //fragments je vektor unique_ptr<Sequence> objekata
+    // Čišćenje i oslobađanje memorije za svaki vektor
+    for (auto& vec : references_to_distribution_vectors) {
+        vec.get().clear();
+        vec.get().shrink_to_fit();
+    }
 
-//----kreiranje distribucijskih vektora očitanja------------------
 
+
+    //----parsiranje očitanja-----------------------------------------
+    auto fragment_parser =
+                bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
+                    "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/metagenomic_sample.fasta");
+    auto fragments = fragment_parser->Parse(-1); //fragments je vektor unique_ptr<Sequence> objekata
+
+    //----kreiranje distribucijskih vektora očitanja------------------
+
+    // Stvaranje vektora referenci
+    vector<reference_wrapper<vector<double>>> references_to_fragments_distribution_vectors;
+    vector<shared_ptr<vector<double>>> real_vectors; 
+
+    for(int i=0;i<fragments.size();i++){
+        if(fragments[i]->data_.size()<k){ //preskačem prekratka očitanja
+            printf("Na poziciji %d u metagenomskom uzorku je prekratko ocitanje\n",i*2+2);
+        }
+        else{
+        // Stvaranje shared_ptr novog vektora za svaki fragment
+        shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(fragments[i], k, false));
+
+        //dodajem u vanjski vektor da bude vidljivo i izvan else bloka
+        real_vectors.push_back(fragment_distribution_vector);
+        // Pohrana referenci na nove vektore
+        references_to_fragments_distribution_vectors.push_back(ref(*fragment_distribution_vector));
+        }
+    }
+
+    //header csv datoteke
+    vector<string> names_frags;
+    int br_stupaca=references_to_fragments_distribution_vectors.size();
+    for(int i = 1; i <= references_to_fragments_distribution_vectors.size(); i++) {
+        names_frags.push_back("readr" + to_string(i));
+    }
+
+    //ispis u csv datoteku
+    string filename2 = "fragments_vectors.csv";
+    string absolute_path2 = get_data_directory() + "/" + filename2;
+    write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2);
 
     return 0;
 }
