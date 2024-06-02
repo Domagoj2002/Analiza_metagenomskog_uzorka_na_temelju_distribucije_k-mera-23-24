@@ -7,6 +7,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <filesystem>
+#include <random>
 #include <functional> // for std::reference_wrapper
 #include "bioparser/fasta_parser.hpp" 
 
@@ -269,10 +270,10 @@ int main(){
                  "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/helicobacter_pylori_reference.fasta");
     auto ref_genome_parser5 =
              bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/legionella_spiritensis_reference.fasta");
+                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/lactobacillus_gasseri_reference.fasta");
     auto ref_genome_parser6 =
              bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/proteus_vulgaris_reference.fasta");
+                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/pantoea_agglomerans_reference.fasta");
     auto ref_genome_parser7 =
              bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
                  "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/pseudomonas_aeruginosa_reference.fasta");
@@ -284,7 +285,7 @@ int main(){
                  "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/streptococcus_pneumoniae_reference.fasta");
     auto ref_genome_parser10 =
              bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/tissierella_praeacuta_reference.fasta");
+                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/streptococcus_urinalis_reference.fasta");
     
     auto ref1 = ref_genome_parser1->Parse(-1); //ref1...10 su vektori unique_ptr<Sequence> objekata
     auto ref2 = ref_genome_parser2->Parse(-1); 
@@ -310,7 +311,7 @@ int main(){
     vector<double> ref_distribution_vector9;
     vector<double> ref_distribution_vector10;
 
-    int k = 2;
+    int k = 5;
 
     ref_distribution_vector1 = get_distribution_vector(ref(ref1[0]),k,true); //koristim referencu da izbjegnem kopiranje podataka)
     ref_distribution_vector2 = get_distribution_vector(ref(ref2[0]),k,true);
@@ -341,8 +342,8 @@ int main(){
 
     // Nazivi bakterija
     vector<string> names = {
-        "b. cereus", "e. coli", "h. influenzae", "h. pylori", "l. spiritensis",
-        "p. vulgaris", "p. aeruginosa", "s. enterica", "s. pneumoniae", "t. praeacuta"
+        "b cereus", "e coli", "h influenzae", "h pylori", "l gasseri", "p agglomerans"
+        , "p aeruginosa", "s enterica", "s pneumoniae", "s urinalis"
     };
 
 
@@ -370,12 +371,14 @@ int main(){
     // Stvaranje vektora referenci
     vector<reference_wrapper<vector<double>>> references_to_fragments_distribution_vectors;
     vector<shared_ptr<vector<double>>> real_vectors; 
+    vector<int> frag_sizes; //pohranjuje duljinu svakog očitanja u uzorku
 
     for(int i=0;i<fragments.size();i++){
-        if(fragments[i]->data_.size()<k){ //preskačem prekratka očitanja
+        if(fragments[i]->data_.size()<k){ //preskačem prekratka očitanja (manja od zadanog k)
             printf("Na poziciji %d u metagenomskom uzorku je prekratko ocitanje\n",i*2+2);
         }
         else{
+        frag_sizes.push_back(fragments[i]->data_.size()); //zapišem duljinu očitanja
         // Stvaranje shared_ptr novog vektora za svaki fragment
         shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(fragments[i], k, false));
 
@@ -397,6 +400,57 @@ int main(){
     string filename2 = "fragments_vectors.csv";
     string absolute_path2 = get_data_directory() + "/" + filename2;
     write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2);
+
+    //----kreiranje očitanja bez greške---------------------------
+
+    vector<int> frags_num = { 100, 91, 83, 106, 119, 97, 78, 111, 144, 70 };
+    vector<vector<unique_ptr<Sequence>>> refs = {ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, ref10};
+
+    vector<reference_wrapper<vector<double>>> references_to_fragments_distribution_vectors;
+    vector<shared_ptr<vector<double>>> real_vectors;
+
+    int size_index = 0;
+    random_device rd;
+    mt19937 gen(rd());
+
+    for (size_t ref_idx = 0; ref_idx < refs.size(); ++ref_idx) {
+        for (int i = 0; i < frags_num[ref_idx]; ++i) {
+            int frag_size = frag_sizes[size_index++];
+            int max_start_idx = refs[ref_idx][0]->data_.size() - frag_size;
+            uniform_int_distribution<> dis(0, max_start_idx);
+            int start_idx = dis(gen);
+
+            string fragment = refs[ref_idx][0]->data_.substr(start_idx, frag_size);
+            //cout << "Generated fragment: " << fragment << endl;
+
+            // Simulate creating a Sequence object from the fragment
+            auto seq = make_shared<Sequence>("frag", 4, fragment.c_str(), fragment.size());
+
+            // Convert shared_ptr to unique_ptr
+            auto seq_unique = make_unique<Sequence>(*seq);
+
+            // Stvaranje shared_ptr novog vektora za svaki fragment
+            shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(seq_unique, frag_size, false));
+
+            //dodajem u vanjski vektor da bude vidljivo i izvan else bloka
+            real_vectors.push_back(fragment_distribution_vector);
+            // Pohrana referenci na nove vektore
+            references_to_fragments_distribution_vectors.push_back(ref(*fragment_distribution_vector));
+        }
+    }
+
+    //header csv datoteke
+    vector<string> names_frags;
+    int br_stupaca = references_to_fragments_distribution_vectors.size();
+    for (int i = 1; i <= references_to_fragments_distribution_vectors.size(); i++) {
+        names_frags.push_back("readr" + to_string(i));
+    }
+
+    //ispis u csv datoteku
+    string filename2 = "NO_ERROR_fragments_vectors.csv";
+    string absolute_path2 = get_data_directory() + "/" + filename2;
+    write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2);
+
 
     return 0;
 }
