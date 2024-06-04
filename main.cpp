@@ -220,6 +220,24 @@ double get_cosinus_similarity(std::map<std::string, double> vector1, std::map<st
     return dot_product / (norm1 * norm2);
 }
 
+// Funkcija za izračunavanje srednje vrijednosti
+double calculateMean(const vector<int>& data, int start, int count) {
+    double sum = 0.0;
+    for (int i = start; i < start + count; ++i) {
+        sum += data[i];
+    }
+    return sum / count;
+}
+
+// Funkcija za izračunavanje standardne devijacije
+double calculateStdDev(const vector<int>& data, int start, int count, double mean) {
+    double sum = 0.0;
+    for (int i = start; i < start + count; ++i) {
+        sum += pow(data[i] - mean, 2);
+    }
+    return sqrt(sum / count);
+}
+
 
 int main(){
           // najprije ide file sa cjelokupnim genomom, a potom fragmenti
@@ -300,45 +318,18 @@ int main(){
 
     //----kreiranje distribucijskih vektora referentnih genoma------------------
 
-    vector<double> ref_distribution_vector1;
-    vector<double> ref_distribution_vector2;
-    vector<double> ref_distribution_vector3;
-    vector<double> ref_distribution_vector4;
-    vector<double> ref_distribution_vector5;
-    vector<double> ref_distribution_vector6;
-    vector<double> ref_distribution_vector7;
-    vector<double> ref_distribution_vector8;
-    vector<double> ref_distribution_vector9;
-    vector<double> ref_distribution_vector10;
+    vector<vector<unique_ptr<Sequence>>> refs = {ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, ref10};
 
     int k = 5;
-
-    ref_distribution_vector1 = get_distribution_vector(ref(ref1[0]),k,true); //koristim referencu da izbjegnem kopiranje podataka)
-    ref_distribution_vector2 = get_distribution_vector(ref(ref2[0]),k,true);
-    ref_distribution_vector3 = get_distribution_vector(ref(ref3[0]),k,true);
-    ref_distribution_vector4 = get_distribution_vector(ref(ref4[0]),k,true);
-    ref_distribution_vector5 = get_distribution_vector(ref(ref5[0]),k,true);
-    ref_distribution_vector6 = get_distribution_vector(ref(ref6[0]),k,true);
-    ref_distribution_vector7 = get_distribution_vector(ref(ref7[0]),k,true);
-    ref_distribution_vector8 = get_distribution_vector(ref(ref8[0]),k,true);
-    ref_distribution_vector9 = get_distribution_vector(ref(ref9[0]),k,true);
-    ref_distribution_vector10 = get_distribution_vector(ref(ref10[0]),k,true);
-
+    vector<vector<double>> ref_distribution_vectors(10);
 
     // Stvaranje vektora referenci
     vector<reference_wrapper<vector<double>>> references_to_distribution_vectors;
-
-    // Dodavanje referenci na distribucijske vektore
-    references_to_distribution_vectors.push_back(ref_distribution_vector1);
-    references_to_distribution_vectors.push_back(ref_distribution_vector2);
-    references_to_distribution_vectors.push_back(ref_distribution_vector3);
-    references_to_distribution_vectors.push_back(ref_distribution_vector4);
-    references_to_distribution_vectors.push_back(ref_distribution_vector5);
-    references_to_distribution_vectors.push_back(ref_distribution_vector6);
-    references_to_distribution_vectors.push_back(ref_distribution_vector7);
-    references_to_distribution_vectors.push_back(ref_distribution_vector8);
-    references_to_distribution_vectors.push_back(ref_distribution_vector9);
-    references_to_distribution_vectors.push_back(ref_distribution_vector10);
+    for(int i = 0; i < 10; i++) {
+        ref_distribution_vectors[i] = get_distribution_vector(ref(refs[i][0]), k, true); //koristim referencu da izbjegnem kopiranje podataka)
+        references_to_distribution_vectors.push_back(ref_distribution_vectors[i]); // Dodavanje referenci na distribucijske vektore
+    }
+    
 
     // Nazivi bakterija
     vector<string> names = {
@@ -378,7 +369,7 @@ int main(){
             printf("Na poziciji %d u metagenomskom uzorku je prekratko ocitanje\n",i*2+2);
         }
         else{
-        frag_sizes.push_back(fragments[i]->data_.size()); //zapišem duljinu očitanja
+        frag_sizes.push_back(fragments[i]->data_.size()); //zapišem duljinu svakog očitanja
         // Stvaranje shared_ptr novog vektora za svaki fragment
         shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(fragments[i], k, false));
 
@@ -401,10 +392,12 @@ int main(){
     string absolute_path2 = get_data_directory() + "/" + filename2;
     write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2);
 
+
+
     //----kreiranje očitanja bez greške---------------------------
 
     vector<int> frags_num = { 100, 91, 83, 106, 119, 97, 78, 111, 144, 70 };
-    vector<vector<unique_ptr<Sequence>>> refs = {ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, ref10};
+
 
     vector<reference_wrapper<vector<double>>> references_to_fragments_distribution_vectors;
     vector<shared_ptr<vector<double>>> real_vectors;
@@ -417,7 +410,7 @@ int main(){
         for (int i = 0; i < frags_num[ref_idx]; ++i) {
             int frag_size = frag_sizes[size_index++];
             int max_start_idx = refs[ref_idx][0]->data_.size() - frag_size;
-            uniform_int_distribution<> dis(0, max_start_idx);
+            uniform_int_distribution<> dis(0, max_start_idx); //iz jednolike razdiobe odabirem brojeve
             int start_idx = dis(gen);
 
             string fragment = refs[ref_idx][0]->data_.substr(start_idx, frag_size);
@@ -439,18 +432,58 @@ int main(){
         }
     }
 
-    //header csv datoteke
-    vector<string> names_frags;
-    int br_stupaca = references_to_fragments_distribution_vectors.size();
-    for (int i = 1; i <= references_to_fragments_distribution_vectors.size(); i++) {
-        names_frags.push_back("readr" + to_string(i));
-    }
-
     //ispis u csv datoteku
     string filename2 = "NO_ERROR_fragments_vectors.csv";
     string absolute_path2 = get_data_directory() + "/" + filename2;
     write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2);
 
 
+
+    //----ispis osnovnih statistika---------------------------
+
+
+
+    // Pretpostavljamo da frag_sizes ima točan broj elemenata
+    if (frag_sizes.size() != accumulate(frags_num.begin(), frags_num.end(), 0)) {
+        cerr << "Vektor frag_sizes nema očekivani broj elemenata!" << endl;
+        return 1;
+    }
+
+    int start = 0;
+
+    // Ispis zaglavlja tablice
+    cout << "                 ";
+    for (const auto& name : names) {
+        cout << setw(15) << name;
+    }
+    cout << endl;
+
+    // Ispis srednjih vrijednosti
+    cout << "average_length";
+    for (size_t i = 0; i < names.size(); ++i) {
+        double mean = calculateMean(frag_sizes, start, frags_num[i]);
+        cout << setw(15) << mean;
+        start += frags_num[i];
+    }
+    cout << endl;
+
+    // Resetiramo početak
+    start = 0;
+
+    // Ispis standardnih devijacija
+    cout << "standard_deviation";
+    for (size_t i = 0; i < names.size(); ++i) {
+        double mean = calculateMean(frag_sizes, start, frags_num[i]);
+        double stddev = calculateStdDev(frag_sizes, start, frags_num[i], mean);
+        cout << setw(15) << stddev;
+        start += frags_num[i];
+    }
+    cout << endl;
+
+
+    //----opis referentnog genoma sa više vektora---------------------------
+
+
+    
     return 0;
 }
