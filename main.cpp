@@ -317,10 +317,22 @@ int main(){
     auto ref10 = ref_genome_parser10->Parse(-1); 
 
     //----kreiranje distribucijskih vektora referentnih genoma------------------
+    //vector<vector<unique_ptr<Sequence>>> refs = {move(ref1), move(ref2), move(ref3), move(ref4), move(ref5), move(ref6), move(ref7), move(ref8), move(ref9), move(ref10)}; //unique pointeri se ne mogu kopirati ali se može premjestiti vlasništvo nad pokazivačem drugoj varijabli
 
-    vector<vector<unique_ptr<Sequence>>> refs = {ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, ref10};
+    //vector<vector<unique_ptr<Sequence>>> refs = {ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, ref10}; inicijalizacijska lista uzrokuje kopiju
+    vector<vector<unique_ptr<Sequence>>> refs;
+    refs.push_back(std::move(ref1));
+    refs.push_back(std::move(ref2));
+    refs.push_back(std::move(ref3));
+    refs.push_back(std::move(ref4));
+    refs.push_back(std::move(ref5));
+    refs.push_back(std::move(ref6));
+    refs.push_back(std::move(ref7));
+    refs.push_back(std::move(ref8));
+    refs.push_back(std::move(ref9));
+    refs.push_back(std::move(ref10));
 
-    int k = 5;
+    int k = 9;
     vector<vector<double>> ref_distribution_vectors(10);
 
     // Stvaranje vektora referenci
@@ -338,10 +350,10 @@ int main(){
     };
 
 
-    //ispis u csv datoteku
+/*     //ispis u csv datoteku
     string filename = "reference_vectors.csv";
     string absolute_path = get_data_directory() + "/" + filename;
-    write_csv(references_to_distribution_vectors, names, absolute_path);
+    write_csv(references_to_distribution_vectors, names, absolute_path); */
 
     // Čišćenje i oslobađanje memorije za svaki vektor
     for (auto& vec : references_to_distribution_vectors) {
@@ -387,20 +399,20 @@ int main(){
         names_frags.push_back("readr" + to_string(i));
     }
 
-    //ispis u csv datoteku
+/*     //ispis u csv datoteku
     string filename2 = "fragments_vectors.csv";
     string absolute_path2 = get_data_directory() + "/" + filename2;
-    write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2);
+    write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2); */
 
 
 
     //----kreiranje očitanja bez greške---------------------------
 
-    vector<int> frags_num = { 100, 91, 83, 106, 119, 97, 78, 111, 144, 70 };
+    vector<int> frags_num = { 100, 91, 82, 106, 119, 97, 78, 111, 144, 70 }; //83 umjesto 82 za k<9 treba napisati
 
 
-    vector<reference_wrapper<vector<double>>> references_to_fragments_distribution_vectors;
-    vector<shared_ptr<vector<double>>> real_vectors;
+    vector<reference_wrapper<vector<double>>> references_to_NO_ERROR_fragments_distribution_vectors;
+    vector<shared_ptr<vector<double>>> real_vectors2;
 
     int size_index = 0;
     random_device rd;
@@ -423,19 +435,19 @@ int main(){
             auto seq_unique = make_unique<Sequence>(*seq);
 
             // Stvaranje shared_ptr novog vektora za svaki fragment
-            shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(seq_unique, frag_size, false));
+            shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(seq_unique, k, true));
 
             //dodajem u vanjski vektor da bude vidljivo i izvan else bloka
-            real_vectors.push_back(fragment_distribution_vector);
+            real_vectors2.push_back(fragment_distribution_vector);
             // Pohrana referenci na nove vektore
-            references_to_fragments_distribution_vectors.push_back(ref(*fragment_distribution_vector));
+            references_to_NO_ERROR_fragments_distribution_vectors.push_back(ref(*fragment_distribution_vector));
         }
     }
 
     //ispis u csv datoteku
-    string filename2 = "NO_ERROR_fragments_vectors.csv";
-    string absolute_path2 = get_data_directory() + "/" + filename2;
-    write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2);
+    string filename3 = "NO_ERROR_fragments_vectors.csv";
+    string absolute_path3 = get_data_directory() + "/" + filename3;
+    write_csv(references_to_NO_ERROR_fragments_distribution_vectors, names_frags, absolute_path3);
 
 
 
@@ -450,16 +462,16 @@ int main(){
     }
 
     int start = 0;
-
+    cout << endl;
     // Ispis zaglavlja tablice
-    cout << "                 ";
+    cout << "                  ";
     for (const auto& name : names) {
         cout << setw(15) << name;
     }
     cout << endl;
 
     // Ispis srednjih vrijednosti
-    cout << "average_length";
+    cout << "average_length    ";
     for (size_t i = 0; i < names.size(); ++i) {
         double mean = calculateMean(frag_sizes, start, frags_num[i]);
         cout << setw(15) << mean;
@@ -479,10 +491,51 @@ int main(){
         start += frags_num[i];
     }
     cout << endl;
-
+    cout << endl;
 
     //----opis referentnog genoma sa više vektora---------------------------
 
+vector<reference_wrapper<vector<double>>> partial_references_to_referent_distribution_vectors;
+vector<shared_ptr<vector<double>>> real_vectors3;
+vector<string> names_partial_refs;  //header csv datoteke
+
+for (size_t ref_idx = 0; ref_idx < refs.size(); ++ref_idx) {
+    auto data = refs[ref_idx][0]->data_;
+    int frag_size = 500000; // veličina fragmenta
+    int overlap = 250000; // preklapanje
+
+    for (uint32_t start_idx = 0; start_idx < data.size(); start_idx += overlap) {
+        string fragment;
+        if (start_idx + frag_size > data.size()) {
+            // Ako je kraj fragmenta izvan genoma, produži na početak
+            fragment = data.substr(start_idx) + data.substr(0, (start_idx + frag_size) % data.size());
+        } else {
+            fragment = data.substr(start_idx, frag_size);
+        }
+
+        // Simulate creating a Sequence object from the fragment
+        auto seq = make_shared<Sequence>("frag", 4, fragment.c_str(), fragment.size());
+
+        // Convert shared_ptr to unique_ptr
+        auto seq_unique = make_unique<Sequence>(*seq);
+
+        // Stvaranje shared_ptr novog vektora za svaki fragment
+        shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(seq_unique, k, true));
+
+        //dodajem u vanjski vektor da bude vidljivo i izvan else bloka
+        real_vectors3.push_back(fragment_distribution_vector);
+        // Pohrana referenci na nove vektore
+        partial_references_to_referent_distribution_vectors.push_back(ref(*fragment_distribution_vector));
+
+        // Dodavanje imena bakterije u vektor imena
+        names_partial_refs.push_back(names[ref_idx] + to_string(start_idx / overlap + 1));
+    }
+}
+
+//ispis u csv datoteku
+string filename4 = "PARTIAL_reference_vectors.csv";
+string absolute_path4 = get_data_directory() + "/" + filename4;
+write_csv(partial_references_to_referent_distribution_vectors, names_partial_refs, absolute_path4);
 
     
     return 0;
