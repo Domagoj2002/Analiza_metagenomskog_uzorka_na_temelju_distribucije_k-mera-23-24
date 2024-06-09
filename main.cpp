@@ -6,12 +6,15 @@
 #include <memory>
 #include <fstream>
 #include <stdexcept>
+#include <regex>
 #include <filesystem>
 #include <random>
 #include <functional> // for std::reference_wrapper
 #include "bioparser/fasta_parser.hpp" 
 
+
 using namespace std;
+namespace fs = std::filesystem;
 
  class Sequence  //prema  uputama za korištenje bioparser modula https://github.com/rvaser/bioparser
   { 
@@ -26,6 +29,8 @@ using namespace std;
   public:
     std::string name_, data_;
   };
+
+
 
 string get_data_directory() { //za dohvaćanje puta do direktorija data
     filesystem::path current_path = filesystem::current_path();
@@ -238,6 +243,89 @@ double calculateStdDev(const vector<int>& data, int start, int count, double mea
     return sqrt(sum / count);
 }
 
+// Funkcija za pretvaranje fastq datoteke u fasta pomoću awk
+void convert_fastq_to_fasta(const string& fastq_file, const string& data_directory) {
+    string fasta_file = regex_replace(fastq_file, regex("\\.fastq$"), ".fasta");
+    string command = "awk '{if(NR%4==1) {printf(\">%s\\n\", substr($0, 2));} else if(NR%4==2) print;}' " + data_directory +"/Reads/"+ fastq_file + " > " + data_directory +"/Reads/"+ fasta_file;
+    system(command.c_str());
+}
+
+
+// Funkcija za parsiranje imena bakterija iz naziva datoteka
+std::string parse_bacteria_name(const std::string& filename) {
+    // Provjeravamo sadrži li naziv datoteke očekivani format
+    size_t fasta_pos = filename.find(".fasta");
+    if (fasta_pos != std::string::npos) {
+        // Pronalazimo prvu poziciju podvlake
+        size_t first_underscore_pos = filename.find('_');
+        if (first_underscore_pos != std::string::npos) {
+            // Provjeravamo postoji li "reference" u nazivu
+            size_t ref_pos = filename.find("_reference");
+            size_t second_underscore_pos = (ref_pos != std::string::npos) ? ref_pos : fasta_pos;
+            
+            // Formiramo rezultat s prvim slovom prve riječi i cijelom drugom riječi
+            std::string result;
+            result += std::tolower(filename[0]);
+            result += ' ';
+            result += filename.substr(first_underscore_pos + 1, second_underscore_pos - first_underscore_pos - 1);
+            return result;
+        }
+    }
+    // Ako format nije odgovarajući, vraćamo neizmijenjeni naziv datoteke
+    return filename;
+}
+
+
+// Funkcija za kreiranje metagenomskog uzorka
+void create_metagenomic_sample(const vector<string>& read_files, 
+                               const vector<int>& read_counts, 
+                               const string& output_file,const string& data_directory) {
+    cout << output_file <<endl;
+    ofstream outfile(output_file);
+    if (!outfile.is_open()) {
+    throw runtime_error("Ne mogu otvoriti datoteku: " + output_file);
+}
+    for (size_t i = 0; i < read_files.size(); ++i) {      
+         cout << read_files[i]<< endl;
+    }
+    for (size_t i = 0; i < read_files.size(); ++i) { 
+ 
+        string input_file = read_files[i];
+        int count = read_counts[i];
+        if (input_file.find(".fastq") != string::npos) {
+            convert_fastq_to_fasta(input_file, data_directory);
+            input_file = regex_replace(input_file, regex("\\.fastq$"), ".fasta");
+        }
+        string command = "awk 'BEGIN {RS=\">\"; ORS=\"\"} NR>1 {print \">\"$0}' " + data_directory + "/Reads/" + input_file + " | head -n " + to_string(count * 2) + " >> " + output_file;
+        system(command.c_str());
+    }
+    outfile.close();
+}
+
+// Funkcija za parsiranje referentnih genoma
+vector<vector<unique_ptr<Sequence>>> parse_reference_genomes(const vector<string>& reference_genomes, int k_mer_length, const vector<string>& names) {
+    vector<vector<unique_ptr<Sequence>>> refs;
+    for (const auto& genome_file : reference_genomes) {
+        auto ref_genome_parser = bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(genome_file);
+        auto ref = ref_genome_parser->Parse(-1);
+        refs.push_back(std::move(ref));
+    }
+
+    vector<vector<double>> ref_distribution_vectors(refs.size());
+    vector<reference_wrapper<vector<double>>> references_to_distribution_vectors;
+
+    for (size_t i = 0; i < refs.size(); ++i) {
+        ref_distribution_vectors[i] = get_distribution_vector(ref(refs[i][0]), k_mer_length, true);
+        references_to_distribution_vectors.push_back(ref_distribution_vectors[i]);
+    }
+
+        //ispis u csv datoteku
+    string filename = "reference_vectors.csv";
+    string absolute_path = get_data_directory() + "/" + filename;
+    write_csv(references_to_distribution_vectors, names, absolute_path); 
+
+    return refs;
+}
 
 int main(){
           // najprije ide file sa cjelokupnim genomom, a potom fragmenti
@@ -274,99 +362,132 @@ int main(){
      //---------------------------------------------------
 
      //----parsiranje referentnih genoma------------------
-    auto ref_genome_parser1 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/bacillus_cereus_reference.fasta");
-    auto ref_genome_parser2 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/escherichia_coli_reference.fasta");
-    auto ref_genome_parser3 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/haemophilus_influenzae_reference.fasta");
-    auto ref_genome_parser4 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/helicobacter_pylori_reference.fasta");
-    auto ref_genome_parser5 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/lactobacillus_gasseri_reference.fasta");
-    auto ref_genome_parser6 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/pantoea_agglomerans_reference.fasta");
-    auto ref_genome_parser7 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/pseudomonas_aeruginosa_reference.fasta");
-    auto ref_genome_parser8 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/salmonella_enterica_reference.fasta");
-    auto ref_genome_parser9 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/streptococcus_pneumoniae_reference.fasta");
-    auto ref_genome_parser10 =
-             bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                 "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/streptococcus_urinalis_reference.fasta");
+    // Definiranje putanje do CONFIGURATION_file.txt
+    filesystem::path current_path = filesystem::current_path();
+    filesystem::path path = current_path.parent_path().parent_path();
+    string config_file = path.string() + "/CONFIGURATION_file.txt";
+    string data_directory = get_data_directory();
+
     
-    auto ref1 = ref_genome_parser1->Parse(-1); //ref1...10 su vektori unique_ptr<Sequence> objekata
-    auto ref2 = ref_genome_parser2->Parse(-1); 
-    auto ref3 = ref_genome_parser3->Parse(-1); 
-    auto ref4 = ref_genome_parser4->Parse(-1); 
-    auto ref5 = ref_genome_parser5->Parse(-1); 
-    auto ref6 = ref_genome_parser6->Parse(-1); 
-    auto ref7 = ref_genome_parser7->Parse(-1); 
-    auto ref8 = ref_genome_parser8->Parse(-1); 
-    auto ref9 = ref_genome_parser9->Parse(-1); 
-    auto ref10 = ref_genome_parser10->Parse(-1); 
+    // Definiranje potrebnih varijabli
+    vector<string> reference_genomes;
+    vector<string> read_files;
+    vector<int> read_counts;
+    string line;
+    int k;
 
-    //----kreiranje distribucijskih vektora referentnih genoma------------------
-    //vector<vector<unique_ptr<Sequence>>> refs = {move(ref1), move(ref2), move(ref3), move(ref4), move(ref5), move(ref6), move(ref7), move(ref8), move(ref9), move(ref10)}; //unique pointeri se ne mogu kopirati ali se može premjestiti vlasništvo nad pokazivačem drugoj varijabli
+    // Učitavanje konfiguracijske datoteke
+    cout << "config file:" << config_file<< endl;
+bool read_references = false, read_reads = false, k_mer = false;
+    ifstream file(config_file);
+    if (file.is_open()) {
+        while (getline(file, line)) {
+            // Preskoči prazne redove i one koji počinju s '#'
+            if (line.empty() || line[0] == '#') {
+                // Provjeri je li linija komentar za referentne genome ili očitanja
+                if (line.find("NAZIVE DATOTEKA KOJE SADRŽE REFERENTNE GENOME") != std::string::npos) {
+                    read_references = true;
+                    read_reads = false;
+                    k_mer = false;
+                } else if (line.find("NAZIVE DATOTEKA KOJE SADRŽE OČITANJA") != std::string::npos) {
+                    read_reads = true;
+                    read_references = false;
+                    k_mer = false;
+                } else if (line.find("UNESITE ŽELJENU DULJINU K-MERA")!= std::string::npos){
+                    read_reads = false;
+                    read_references = false;
+                    k_mer = true;
+                }
+                continue;
+            }
 
-    //vector<vector<unique_ptr<Sequence>>> refs = {ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, ref10}; inicijalizacijska lista uzrokuje kopiju
+            if (read_references) {
+                // Učitavanje referentnih genoma
+                reference_genomes.push_back(line);
+            } else if (read_reads) {
+                // Učitavanje očitanja i broja očitanja
+                std::istringstream iss(line);
+                std::string file_name;
+                int count;
+                iss >> file_name >> count;
+                read_files.push_back(file_name);
+                read_counts.push_back(count);
+            } else if (k_mer){
+                // Učitavanje željene duljine k-mera
+                std::istringstream iss(line);
+                iss >> k;
+            }
+        }
+        file.close();
+    } else {
+        std::cerr << "Ne mogu otvoriti konfiguracijsku datoteku." << std::endl;
+    }
+
+    // Ispis učitanih podataka za provjeru
+    std::cout << "Referentni genomi:" << std::endl;
+    for (const auto& genome : reference_genomes) {
+        std::cout << genome << std::endl;
+    }
+    std::cout << "Očitanja i broj očitanja:" << std::endl;
+    for (size_t i = 0; i < read_files.size(); ++i) {
+        std::cout << read_files[i] << " " << read_counts[i] << std::endl;
+    }
+    std::cout << "Željena duljina k-mera: " << k << std::endl;
+
+    // Parsiranje imena bakterija za referentne genome
+    vector<string> names;
+    for (const auto& genome_file : reference_genomes) {
+        names.push_back(parse_bacteria_name(genome_file));
+    }
+
+    // Kreiranje metagenomskog uzorka ako datoteka ne postoji
+    string metagenomic_sample_file = data_directory + "/" + "metagenomic_sample.fasta";
+    if (!fs::exists(metagenomic_sample_file)) {
+        for (size_t i = 0; i < read_files.size(); ++i) {      
+         cout << read_files[i]<< endl;
+          cout << read_files.size()<< endl;
+    }
+        create_metagenomic_sample(read_files, read_counts, metagenomic_sample_file, data_directory);
+    } else {
+        cout << "Datoteka metagenomic_sample.fasta već postoji. Preskačem stvaranje nove datoteke." << endl;
+    }
+
+    // Parsiranje imena bakterija za metagenomski uzorak i broja očitanja
+    vector<string> names_metagenomic_sample;
+    for (const auto& read_file : read_files) {
+        names_metagenomic_sample.push_back(parse_bacteria_name(read_file));
+    }
+
+    // Poklapanje redoslijeda imena bakterija i broja očitanja
+    //vector<int> frags_num(read_counts);
+
+// Parsiranje referentnih genoma i stvaranje distribucijskih vektora
     vector<vector<unique_ptr<Sequence>>> refs;
-    refs.push_back(std::move(ref1));
-    refs.push_back(std::move(ref2));
-    refs.push_back(std::move(ref3));
-    refs.push_back(std::move(ref4));
-    refs.push_back(std::move(ref5));
-    refs.push_back(std::move(ref6));
-    refs.push_back(std::move(ref7));
-    refs.push_back(std::move(ref8));
-    refs.push_back(std::move(ref9));
-    refs.push_back(std::move(ref10));
+    for (const auto& genome_file : reference_genomes) {
+        auto ref_genome_parser = bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(data_directory + "/Referent_genomes/"+ genome_file);
+        auto ref = ref_genome_parser->Parse(-1);
+        refs.push_back(move(ref));
+    }
 
-    int k = 9;
-    vector<vector<double>> ref_distribution_vectors(10);
-
-    // Stvaranje vektora referenci
+    vector<vector<double>> ref_distribution_vectors(refs.size());
     vector<reference_wrapper<vector<double>>> references_to_distribution_vectors;
-    for(int i = 0; i < 10; i++) {
-        ref_distribution_vectors[i] = get_distribution_vector(ref(refs[i][0]), k, true); //koristim referencu da izbjegnem kopiranje podataka)
-        references_to_distribution_vectors.push_back(ref_distribution_vectors[i]); // Dodavanje referenci na distribucijske vektore
+
+    for (size_t i = 0; i < refs.size(); ++i) {
+        ref_distribution_vectors[i] = get_distribution_vector(ref(refs[i][0]), k, true);
+        references_to_distribution_vectors.push_back(ref_distribution_vectors[i]);
     }
-    
 
-    // Nazivi bakterija
-    vector<string> names = {
-        "b cereus", "e coli", "h influenzae", "h pylori", "l gasseri", "p agglomerans"
-        , "p aeruginosa", "s enterica", "s pneumoniae", "s urinalis"
-    };
-
-
-/*     //ispis u csv datoteku
+    // Ispis distribucijskih vektora u CSV datoteku
     string filename = "reference_vectors.csv";
-    string absolute_path = get_data_directory() + "/" + filename;
-    write_csv(references_to_distribution_vectors, names, absolute_path); */
-
-    // Čišćenje i oslobađanje memorije za svaki vektor
-    for (auto& vec : references_to_distribution_vectors) {
-        vec.get().clear();
-        vec.get().shrink_to_fit();
-    }
+    string absolute_path = data_directory + "/" + filename;
+    write_csv(references_to_distribution_vectors, names, absolute_path);
 
 
 
     //----parsiranje očitanja-----------------------------------------
     auto fragment_parser =
                 bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-                    "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/metagenomic_sample.fasta");
+                    data_directory + "/" + "metagenomic_sample.fasta");
     auto fragments = fragment_parser->Parse(-1); //fragments je vektor unique_ptr<Sequence> objekata
 
     //----kreiranje distribucijskih vektora očitanja------------------
@@ -379,6 +500,14 @@ int main(){
     for(int i=0;i<fragments.size();i++){
         if(fragments[i]->data_.size()<k){ //preskačem prekratka očitanja (manja od zadanog k)
             printf("Na poziciji %d u metagenomskom uzorku je prekratko ocitanje\n",i*2+2);
+            int zbroj=0;
+            for(int k=0;k<read_counts.size();k++){
+                zbroj += read_counts[k]; 
+                if(i<=zbroj-1){
+                    read_counts[k]=read_counts[k]-1; //zbog izbacivanja smanjim broj
+                    break;
+                }
+            }
         }
         else{
         frag_sizes.push_back(fragments[i]->data_.size()); //zapišem duljinu svakog očitanja
@@ -393,22 +522,29 @@ int main(){
     }
 
     //header csv datoteke
-    vector<string> names_frags;
-    int br_stupaca=references_to_fragments_distribution_vectors.size();
+/*     vector<string> names_frags;
     for(int i = 1; i <= references_to_fragments_distribution_vectors.size(); i++) {
         names_frags.push_back("readr" + to_string(i));
+    } */
+    //header csv datoteke
+    vector<string> names_frags;
+    // Popunjavanje vektora names_frags
+    for (size_t i = 0; i < read_counts.size(); ++i) {
+        for (int j = 0; j < read_counts[i]; ++j) {
+            names_frags.push_back(names_metagenomic_sample[i]);
+        }
     }
 
-/*     //ispis u csv datoteku
+    //ispis u csv datoteku
     string filename2 = "fragments_vectors.csv";
     string absolute_path2 = get_data_directory() + "/" + filename2;
-    write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2); */
+    write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2);
 
 
 
     //----kreiranje očitanja bez greške---------------------------
 
-    vector<int> frags_num = { 100, 91, 82, 106, 119, 97, 78, 111, 144, 70 }; //83 umjesto 82 za k<9 treba napisati
+    //vector<int> frags_num = { 100, 91, 82, 106, 119, 97, 78, 111, 144, 70 }; //83 umjesto 82 za k<9 treba napisati
 
 
     vector<reference_wrapper<vector<double>>> references_to_NO_ERROR_fragments_distribution_vectors;
@@ -419,7 +555,7 @@ int main(){
     mt19937 gen(rd());
 
     for (size_t ref_idx = 0; ref_idx < refs.size(); ++ref_idx) {
-        for (int i = 0; i < frags_num[ref_idx]; ++i) {
+        for (int i = 0; i < read_counts[ref_idx]; ++i) {
             int frag_size = frag_sizes[size_index++];
             int max_start_idx = refs[ref_idx][0]->data_.size() - frag_size;
             uniform_int_distribution<> dis(0, max_start_idx); //iz jednolike razdiobe odabirem brojeve
@@ -456,7 +592,7 @@ int main(){
 
 
     // Pretpostavljamo da frag_sizes ima točan broj elemenata
-    if (frag_sizes.size() != accumulate(frags_num.begin(), frags_num.end(), 0)) {
+    if (frag_sizes.size() != accumulate(read_counts.begin(), read_counts.end(), 0)) {
         cerr << "Vektor frag_sizes nema očekivani broj elemenata!" << endl;
         return 1;
     }
@@ -465,17 +601,17 @@ int main(){
     cout << endl;
     // Ispis zaglavlja tablice
     cout << "                  ";
-    for (const auto& name : names) {
+    for (const auto& name : names_metagenomic_sample) {
         cout << setw(15) << name;
     }
     cout << endl;
 
     // Ispis srednjih vrijednosti
     cout << "average_length    ";
-    for (size_t i = 0; i < names.size(); ++i) {
-        double mean = calculateMean(frag_sizes, start, frags_num[i]);
+    for (size_t i = 0; i < names_metagenomic_sample.size(); ++i) {
+        double mean = calculateMean(frag_sizes, start, read_counts[i]);
         cout << setw(15) << mean;
-        start += frags_num[i];
+        start += read_counts[i];
     }
     cout << endl;
 
@@ -484,11 +620,21 @@ int main(){
 
     // Ispis standardnih devijacija
     cout << "standard_deviation";
-    for (size_t i = 0; i < names.size(); ++i) {
-        double mean = calculateMean(frag_sizes, start, frags_num[i]);
-        double stddev = calculateStdDev(frag_sizes, start, frags_num[i], mean);
+    for (size_t i = 0; i < names_metagenomic_sample.size(); ++i) {
+        double mean = calculateMean(frag_sizes, start, read_counts[i]);
+        double stddev = calculateStdDev(frag_sizes, start, read_counts[i], mean);
         cout << setw(15) << stddev;
-        start += frags_num[i];
+        start += read_counts[i];
+    }
+    cout << endl;
+    // Resetiramo početak
+    start = 0;
+
+    // Ispis broja ocitanja po bakteriji
+    cout << "num_of_reads      ";
+    for (size_t i = 0; i < names_metagenomic_sample.size(); ++i) {
+        cout << setw(15) << read_counts[i];
+        start += read_counts[i];
     }
     cout << endl;
     cout << endl;

@@ -1,0 +1,30 @@
+#UNESITE NAZIVE DATOTEKA KOJE SADRŽE REFERENTNE GENOME. NAZIV SVAKE DATOTEKE ZAPIŠITE U ZASEBAN REDAK.
+
+bacillus_cereus_reference.fasta
+escherichia_coli_reference.fasta
+haemophilus_influenzae_reference.fasta
+helicobacter_pylori_reference.fasta
+lactobacillus_gasseri_reference.fasta
+pantoea_agglomerans_reference.fasta
+pseudomonas_aeruginosa_reference.fasta
+salmonella_enterica_reference.fasta
+streptococcus_pneumoniae_reference.fasta
+streptococcus_urinalis_reference.fasta
+
+#UNESITE NAZIVE DATOTEKA KOJE SADRŽE OČITANJA OD KOJIH ŽELITE KREIRATI METAGENOMSKI UZORAK TE POKRAJ NJEGA UPIŠITE BROJ OČITANJA KOJA ŽELITE UBACITI U UZORAK. (NPR. bacillus_cereus.fasta 1200)
+#UKOLIKO VEĆ POSTOJI DATOTEKA metagenomic_sample.fasta U data DIREKTORIJU NEĆE SE STVARATI NOVA NEGO JE POTREBNO MAKNUTI TU DATOTEKU KAKO BI SE NOVA STVORILA. NAZIV SVAKE DATOTEKE ZAPIŠITE U ZASEBAN #REDAK.
+
+bacillus_cereus.fasta 100         
+escherichia_coli.fasta 91        
+haemophilus_influenzae.fasta 83  
+helicobacter_pylori.fasta 107     
+lactobacillus_gasseri.fasta 119   
+pantoea_agglomerans.fasta 97
+pseudomonas_aeruginosa.fasta 78
+salmonella_enterica.fasta 111
+streptococcus_pneumoniae.fasta 144
+streptococcus_urinalis.fasta 70
+
+#UNESITE ŽELJENU DULJINU K-MERA:
+4
+ 
