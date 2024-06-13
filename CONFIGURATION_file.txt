@@ -1,30 +1,36 @@
-#UNESITE NAZIVE DATOTEKA KOJE SADRŽE REFERENTNE GENOME. NAZIV SVAKE DATOTEKE ZAPIŠITE U ZASEBAN REDAK.
+#UNESITE NAZIVE DATOTEKA KOJE SADRŽE REFERENTNE GENOME. NAZIV SVAKE DATOTEKE ZAPIŠITE U ZASEBAN REDAK. 
+#POKRAJ NAZIVA STAVITE OZNAKU true/false OVISNO O TOME JE LI DOTIČNI GENOM CIRKULARAN ILI NE.
 
-bacillus_cereus_reference.fasta
-escherichia_coli_reference.fasta
-haemophilus_influenzae_reference.fasta
-helicobacter_pylori_reference.fasta
-lactobacillus_gasseri_reference.fasta
-pantoea_agglomerans_reference.fasta
-pseudomonas_aeruginosa_reference.fasta
-salmonella_enterica_reference.fasta
-streptococcus_pneumoniae_reference.fasta
-streptococcus_urinalis_reference.fasta
+bacillus_cereus_reference.fasta true
+escherichia_coli_reference.fasta true
+haemophilus_influenzae_reference.fasta true
+helicobacter_pylori_reference.fasta true
+pantoea_agglomerans_reference.fasta true
+pseudomonas_aeruginosa_reference.fasta true
+salmonella_enterica_reference.fasta true
+streptococcus_pneumoniae_reference.fasta true
 
-#UNESITE NAZIVE DATOTEKA KOJE SADRŽE OČITANJA OD KOJIH ŽELITE KREIRATI METAGENOMSKI UZORAK TE POKRAJ NJEGA UPIŠITE BROJ OČITANJA KOJA ŽELITE UBACITI U UZORAK. (NPR. bacillus_cereus.fasta 1200)
-#UKOLIKO VEĆ POSTOJI DATOTEKA metagenomic_sample.fasta U data DIREKTORIJU NEĆE SE STVARATI NOVA NEGO JE POTREBNO MAKNUTI TU DATOTEKU KAKO BI SE NOVA STVORILA. NAZIV SVAKE DATOTEKE ZAPIŠITE U ZASEBAN #REDAK.
+#UNESITE NAZIVE DATOTEKA KOJE SADRŽE OČITANJA OD KOJIH ŽELITE KREIRATI METAGENOMSKI UZORAK TE POKRAJ NJEGA 
+#UPIŠITE BROJ OČITANJA KOJA ŽELITE UBACITI U UZORAK. (NPR. bacillus_cereus.fasta 1200)
+#UKOLIKO VEĆ POSTOJI DATOTEKA metagenomic_sample.fasta U data DIREKTORIJU NEĆE SE STVARATI NOVA NEGO JE POTREBNO MAKNUTI TU DATOTEKU
+#KAKO BI SE NOVA STVORILA. NAZIV SVAKE DATOTEKE ZAPIŠITE U ZASEBAN REDAK.
 
-bacillus_cereus.fasta 100         
-escherichia_coli.fasta 91        
-haemophilus_influenzae.fasta 83  
-helicobacter_pylori.fasta 107     
-lactobacillus_gasseri.fasta 119   
-pantoea_agglomerans.fasta 97
-pseudomonas_aeruginosa.fasta 78
-salmonella_enterica.fasta 111
-streptococcus_pneumoniae.fasta 144
-streptococcus_urinalis.fasta 70
+bacillus_cereus.fasta 1000         
+escherichia_coli.fasta 1170       
+haemophilus_influenzae.fasta 970 
+helicobacter_pylori.fasta 1058     
+lactobacillus_gasseri.fasta 768  
+pantoea_agglomerans.fasta 978
+pseudomonas_aeruginosa.fasta 927
+salmonella_enterica.fasta 1190
+streptococcus_pneumoniae.fasta 1240
+streptococcus_urinalis.fasta 707
 
 #UNESITE ŽELJENU DULJINU K-MERA:
-4
- 
+3
+
+#UNESITE ŽELJENU DULJINU ODSJEČKA REFERENTNOG GENOMA ZA OPIS GENOMA SA VIŠE DISTRIBUCIJSKIH VEKTORA:
+500000
+
+#UNESITE DULJINU PREKLAPANJA IZMEĐU PRETHODNO ODREĐENIH ODSJEČAKA
+250000

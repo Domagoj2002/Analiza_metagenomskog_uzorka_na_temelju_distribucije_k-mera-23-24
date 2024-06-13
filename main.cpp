@@ -9,7 +9,7 @@
 #include <regex>
 #include <filesystem>
 #include <random>
-#include <functional> // for std::reference_wrapper
+#include <functional> 
 #include "bioparser/fasta_parser.hpp" 
 
 
@@ -41,11 +41,9 @@ string get_data_directory() { //za dohvaćanje puta do direktorija data
 uint64_t sequence_length(string name) {  //fja za dohvaćanje duljine očitanja iz metapodataka fasta datoteke
     size_t last_slash = name.rfind('/');
     size_t last_underscore = name.rfind('_');
-    //cout << "izracuanata distribucija1"<<endl;
     if (last_slash != string::npos && last_underscore != string::npos) {
         string start_str = name.substr(last_slash + 1, last_underscore - last_slash - 1);
         string end_str = name.substr(last_underscore + 1);
-        //cout << "izracuanata distribucija2"<<endl;
         uint64_t start = 0;
         uint64_t end = 0;
         try {
@@ -81,7 +79,7 @@ vector<double> get_distribution_vector(const unique_ptr<Sequence>& fragment, int
     string sequence = fragment->data_;
     vector<double> distribution_vector;
 
-    // Initialization of the map
+    // inicijalizacija mape
     for (int i = 0; i < pow(4, k); i++) {
         string kmer = "";
         int x = i;
@@ -93,18 +91,18 @@ vector<double> get_distribution_vector(const unique_ptr<Sequence>& fragment, int
         kmer_counts[kmer] = 0;
     }
 
-    // Counting k-mers
+    // brojanje k-mera
     for (uint64_t i = 0; i < length; i++) {
         string kmer = sequence.substr(i, k);
         kmer_counts[kmer]++;
     }
     
-    // Calculating distribution
+    // racunanje distribucije
     for (auto& pair : kmer_counts) {
         pair.second /= length;
     }
 
-    // Adding components to the vector in the same order as the addition
+    // dodavanje komponenti u vektor odgovarajućim redoslijedom
     for (int i = 0; i < pow(4, k); i++) {
         string kmer = "";
         int x = i;
@@ -122,39 +120,6 @@ vector<double> get_distribution_vector(const unique_ptr<Sequence>& fragment, int
 
 
 
-map<string, double> get_distribution_vector_map(const unique_ptr<Sequence>& fragment, int k) { //verzija fje sa mapama
-    string name = fragment->name_;
-    uint64_t length = sequence_length(name);
-    length=length-k+1;
-    map<string, double> kmer_counts;
-    string sequence = fragment->data_;  
-
-    // Inicijalizacija mape
-    for (int i = 0; i < pow(4, k); i++) {
-        string kmer = "";
-        int x = i;
-        for (int j = 0; j < k; j++) {
-            char base = "ACGT"[x % 4];
-            kmer = base + kmer;
-            x /= 4;
-        }
-        kmer_counts[kmer] = 0;
-    }
-
-    // Brojanje k-mera
-    for (uint64_t i = 0; i < length; i++) {
-        string kmer = sequence.substr(i, k);
-        kmer_counts[kmer]++;
-    }
-
-    // Izračunavanje distribucije
-    for (auto& pair : kmer_counts) {
-        pair.second /= length;
-    }
-
-    return kmer_counts;
-}
-
 void write_csv(const vector<reference_wrapper<vector<double>>>& references_to_distribution_vectors, const vector<string>& names, const string& filename) {
     if (references_to_distribution_vectors.size() != names.size()) {
         printf("Velicina vektora referenci je %d,a velicina vektora imena je %d\n",(int)references_to_distribution_vectors.size(),(int)names.size());
@@ -166,7 +131,7 @@ void write_csv(const vector<reference_wrapper<vector<double>>>& references_to_di
     throw runtime_error("Ne mogu otvoriti datoteku: " + filename);
 }
     
-    // Write the header
+    // ispis zaglavlja
     for (size_t i = 0; i < names.size(); i++) {
         file << names[i];
         if (i != names.size() - 1) {
@@ -175,7 +140,6 @@ void write_csv(const vector<reference_wrapper<vector<double>>>& references_to_di
     }
     file << "\n";
     
-    // Write the data
     size_t length = references_to_distribution_vectors[0].get().size();//to je broj redaka
 
     for (size_t i = 0; i < length; i++) { //redak
@@ -215,11 +179,11 @@ double get_cosinus_similarity(std::map<std::string, double> vector1, std::map<st
         norm2 += value2 * value2;
     }
 
-    norm1 = std::sqrt(norm1);
-    norm2 = std::sqrt(norm2);
+    norm1 = sqrt(norm1);
+    norm2 = sqrt(norm2);
 
     if (norm1 == 0.0 || norm2 == 0.0) {
-        throw std::invalid_argument("Norma jednog od vektora je 0, kosinusna sličnost nije definirana.");
+        throw invalid_argument("Norma jednog od vektora je 0, kosinusna slicnost nije definirana.");
     }
 
     return dot_product / (norm1 * norm2);
@@ -280,13 +244,12 @@ std::string parse_bacteria_name(const std::string& filename) {
 void create_metagenomic_sample(const vector<string>& read_files, 
                                const vector<int>& read_counts, 
                                const string& output_file,const string& data_directory) {
-    cout << output_file <<endl;
     ofstream outfile(output_file);
     if (!outfile.is_open()) {
     throw runtime_error("Ne mogu otvoriti datoteku: " + output_file);
 }
     for (size_t i = 0; i < read_files.size(); ++i) {      
-         cout << read_files[i]<< endl;
+         std::cout << read_files[i]<< endl;
     }
     for (size_t i = 0; i < read_files.size(); ++i) { 
  
@@ -302,66 +265,11 @@ void create_metagenomic_sample(const vector<string>& read_files,
     outfile.close();
 }
 
-// Funkcija za parsiranje referentnih genoma
-vector<vector<unique_ptr<Sequence>>> parse_reference_genomes(const vector<string>& reference_genomes, int k_mer_length, const vector<string>& names) {
-    vector<vector<unique_ptr<Sequence>>> refs;
-    for (const auto& genome_file : reference_genomes) {
-        auto ref_genome_parser = bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(genome_file);
-        auto ref = ref_genome_parser->Parse(-1);
-        refs.push_back(std::move(ref));
-    }
-
-    vector<vector<double>> ref_distribution_vectors(refs.size());
-    vector<reference_wrapper<vector<double>>> references_to_distribution_vectors;
-
-    for (size_t i = 0; i < refs.size(); ++i) {
-        ref_distribution_vectors[i] = get_distribution_vector(ref(refs[i][0]), k_mer_length, true);
-        references_to_distribution_vectors.push_back(ref_distribution_vectors[i]);
-    }
-
-        //ispis u csv datoteku
-    string filename = "reference_vectors.csv";
-    string absolute_path = get_data_directory() + "/" + filename;
-    write_csv(references_to_distribution_vectors, names, absolute_path); 
-
-    return refs;
-}
 
 int main(){
-          // najprije ide file sa cjelokupnim genomom, a potom fragmenti
-    // auto genome_parser =
-    //       bioparser::Parser<Sequence>::Create<FastaParser>( //izbrisano bioparser::
-    //           argv[optind]);
-    // auto genomes = genome_parser->Parse(-1);
-    //---------------------------------------------------
-    // auto fragment_parser =
-    //          bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
-    //              "/home/domagoj/Desktop/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24/data/NCTC4450.fasta");
-    // auto fragments = fragment_parser->Parse(-1); //fragments je vektor unique_ptr<Sequence> objekata
-    // cout << fragments[0]->name_ << endl;
-    // cout << fragments[0]->data_ << endl;
-    // cout <<"prva 3 znaka ocitanja su"<< fragments[0]->data_.substr(0,3) << endl;
-    // cout << "duljina jednog očitanja"<< fragments[0]->data_.size()<< endl;
-    // cout << "Broj fragmenata: " << fragments.size() << endl;
-    // cout << sequence_length(">m151004_144909_00127_c100873272550000001823191402121654_s1_p0/8/4883_9223") << endl;
 
-    // map<string, double> mapa;
-    // mapa=get_distribution_vector_map(ref(fragments[0]),3); //koristim referencu da izbjegnem kopiranje podataka
+    //----parsiranje referentnih genoma------------------
 
-    //     // Ispis sadržaja mape
-    // cout << "Sadržaj mape kmer_counts:" << endl;
-    // for (const auto& pair : mapa) {
-    //     cout << pair.first << ": " << pair.second << endl;
-    // }
-
-    // // for (auto& fragment : fragments) { //unique pointer se ne može kopirati pa koristiš referencu
-    // //     printf(fragment->data_);
-    // // }
-
-    // printf("Sve funkcionira\n");
-     //---------------------------------------------------
-
-     //----parsiranje referentnih genoma------------------
     // Definiranje putanje do CONFIGURATION_file.txt
     filesystem::path current_path = filesystem::current_path();
     filesystem::path path = current_path.parent_path().parent_path();
@@ -371,68 +279,118 @@ int main(){
     
     // Definiranje potrebnih varijabli
     vector<string> reference_genomes;
+    vector<bool> circular_genomes;
     vector<string> read_files;
     vector<int> read_counts;
     string line;
     int k;
+    int frag_size;
+    int overlap;
 
     // Učitavanje konfiguracijske datoteke
-    cout << "config file:" << config_file<< endl;
-bool read_references = false, read_reads = false, k_mer = false;
+    bool read_references = false, read_reads = false, k_mer = false, frag_size_flag = false, overlap_flag = false;
     ifstream file(config_file);
     if (file.is_open()) {
         while (getline(file, line)) {
             // Preskoči prazne redove i one koji počinju s '#'
             if (line.empty() || line[0] == '#') {
-                // Provjeri je li linija komentar za referentne genome ili očitanja
+                // Provjeri je li linija komentar za referentne genome, očitanja, k-mer, frag_size, ili overlap
                 if (line.find("NAZIVE DATOTEKA KOJE SADRŽE REFERENTNE GENOME") != std::string::npos) {
                     read_references = true;
                     read_reads = false;
                     k_mer = false;
+                    frag_size_flag = false;
+                    overlap_flag = false;
                 } else if (line.find("NAZIVE DATOTEKA KOJE SADRŽE OČITANJA") != std::string::npos) {
                     read_reads = true;
                     read_references = false;
                     k_mer = false;
-                } else if (line.find("UNESITE ŽELJENU DULJINU K-MERA")!= std::string::npos){
+                    frag_size_flag = false;
+                    overlap_flag = false;
+                } else if (line.find("UNESITE ŽELJENU DULJINU K-MERA") != std::string::npos) {
                     read_reads = false;
                     read_references = false;
                     k_mer = true;
+                    frag_size_flag = false;
+                    overlap_flag = false;
+                } else if (line.find("UNESITE ŽELJENU DULJINU ODSJEČKA REFERENTNOG GENOMA") != std::string::npos) {
+                    read_reads = false;
+                    read_references = false;
+                    k_mer = false;
+                    frag_size_flag = true;
+                    overlap_flag = false;
+                } else if (line.find("UNESITE DULJINU PREKLAPANJA IZMEĐU PRETHODNO ODREĐENIH ODSJEČAKA") != std::string::npos) {
+                    read_reads = false;
+                    read_references = false;
+                    k_mer = false;
+                    frag_size_flag = false;
+                    overlap_flag = true;
                 }
                 continue;
             }
 
-            if (read_references) {
-                // Učitavanje referentnih genoma
-                reference_genomes.push_back(line);
-            } else if (read_reads) {
-                // Učitavanje očitanja i broja očitanja
-                std::istringstream iss(line);
-                std::string file_name;
-                int count;
-                iss >> file_name >> count;
-                read_files.push_back(file_name);
-                read_counts.push_back(count);
-            } else if (k_mer){
-                // Učitavanje željene duljine k-mera
-                std::istringstream iss(line);
-                iss >> k;
+            try {
+                if (read_references) {
+                    // Učitavanje referentnih genoma
+                    istringstream iss(line);
+                    string file_name, circular_str;
+                    if (!(iss >> file_name >> circular_str)) {
+                        throw runtime_error("Invalid format for reference genomes");
+                    }
+                    bool circular = (circular_str == "true");
+                    reference_genomes.push_back(file_name);
+                    circular_genomes.push_back(circular);
+                } else if (read_reads) {
+                    // Učitavanje očitanja i broja očitanja
+                    istringstream iss(line);
+                    string file_name;
+                    int count;
+                    if (!(iss >> file_name >> count)) {
+                        throw runtime_error("Invalid format for read files");
+                    }
+                    read_files.push_back(file_name);
+                    read_counts.push_back(count);
+                } else if (k_mer) {
+                    // Ucitavanje željene duljine k-mera
+                    istringstream iss(line);
+                    if (!(iss >> k)) {
+                        throw runtime_error("Invalid format for k-mer length");
+                    }
+                } else if (frag_size_flag) {
+                    // Ucitavanje željene duljine odsjeka referentnog genoma
+                    istringstream iss(line);
+                    if (!(iss >> frag_size)) {
+                        throw runtime_error("Invalid format for fragment size");
+                    }
+                } else if (overlap_flag) {
+                    // Ucitavanje duljine preklapanja izmedu odsjecaka
+                    istringstream iss(line);
+                    if (!(iss >> overlap)) {
+                        throw runtime_error("Invalid format for overlap length");
+                    }
+                }
+            } catch (const exception &e) {
+                cerr << "Error reading line: " << line << ". " << e.what() << endl;
             }
         }
         file.close();
     } else {
-        std::cerr << "Ne mogu otvoriti konfiguracijsku datoteku." << std::endl;
+        cerr << "Ne mogu otvoriti konfiguracijsku datoteku." << endl;
     }
 
     // Ispis učitanih podataka za provjeru
-    std::cout << "Referentni genomi:" << std::endl;
-    for (const auto& genome : reference_genomes) {
-        std::cout << genome << std::endl;
+    cout << "Referentni genomi:" << endl;
+    for (size_t i = 0; i < reference_genomes.size(); ++i) {
+        std::cout << reference_genomes[i] <<  endl;
     }
-    std::cout << "Očitanja i broj očitanja:" << std::endl;
+    cout << endl;
+    cout << "Očitanja i broj očitanja:" << endl;
     for (size_t i = 0; i < read_files.size(); ++i) {
-        std::cout << read_files[i] << " " << read_counts[i] << std::endl;
+        std::cout << read_files[i] << " " << read_counts[i] << endl;
     }
-    std::cout << "Željena duljina k-mera: " << k << std::endl;
+    cout << "Željena duljina k-mera: " << k << endl;
+    cout << "Željena duljina odsjeka referentnog genoma: " << frag_size << endl;
+    cout << "Duljina preklapanja: " << overlap << endl;
 
     // Parsiranje imena bakterija za referentne genome
     vector<string> names;
@@ -441,11 +399,11 @@ bool read_references = false, read_reads = false, k_mer = false;
     }
 
     // Kreiranje metagenomskog uzorka ako datoteka ne postoji
+    cout << "Metagenoski uzorak stvoren je iz datoteka:"<< endl;
     string metagenomic_sample_file = data_directory + "/" + "metagenomic_sample.fasta";
     if (!fs::exists(metagenomic_sample_file)) {
         for (size_t i = 0; i < read_files.size(); ++i) {      
          cout << read_files[i]<< endl;
-          cout << read_files.size()<< endl;
     }
         create_metagenomic_sample(read_files, read_counts, metagenomic_sample_file, data_directory);
     } else {
@@ -458,10 +416,8 @@ bool read_references = false, read_reads = false, k_mer = false;
         names_metagenomic_sample.push_back(parse_bacteria_name(read_file));
     }
 
-    // Poklapanje redoslijeda imena bakterija i broja očitanja
-    //vector<int> frags_num(read_counts);
 
-// Parsiranje referentnih genoma i stvaranje distribucijskih vektora
+    // Parsiranje referentnih genoma i stvaranje distribucijskih vektora
     vector<vector<unique_ptr<Sequence>>> refs;
     for (const auto& genome_file : reference_genomes) {
         auto ref_genome_parser = bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(data_directory + "/Referent_genomes/"+ genome_file);
@@ -482,15 +438,123 @@ bool read_references = false, read_reads = false, k_mer = false;
     string absolute_path = data_directory + "/" + filename;
     write_csv(references_to_distribution_vectors, names, absolute_path);
 
+    // Oslobađanje memorije nakon ispisivanja u CSV datoteku
+    ref_distribution_vectors.clear();  // Briše sve vektore iz 'ref_distribution_vectors'
+    ref_distribution_vectors.shrink_to_fit();  // Smanjuje kapacitet vektora na 0
+
+    references_to_distribution_vectors.clear();  // Briše sve reference
 
 
-    //----parsiranje očitanja-----------------------------------------
+    //----opis referentnog genoma sa više vektora---------------------------
+
+
+    vector<reference_wrapper<vector<double>>> partial_references_to_referent_distribution_vectors;
+    vector<shared_ptr<vector<double>>> real_vectors3;
+    vector<string> names_partial_refs;  //header csv datoteke
+
+    for (size_t ref_idx = 0; ref_idx < refs.size(); ++ref_idx) {
+        auto data = refs[ref_idx][0]->data_;
+        bool is_circular = circular_genomes[ref_idx];
+        if(is_circular){
+            for (uint32_t start_idx = 0; start_idx < data.size(); start_idx += (frag_size - overlap)) {
+                string fragment;
+                if (start_idx + frag_size > data.size()) {
+                    // Ako je kraj fragmenta izvan genoma, produži na početak
+                    fragment = data.substr(start_idx) + data.substr(0, (start_idx + frag_size) % data.size());
+                } else {
+                    fragment = data.substr(start_idx, frag_size);
+                }
+
+                // Simulate creating a Sequence object from the fragment
+                auto seq = make_shared<Sequence>("frag", 4, fragment.c_str(), fragment.size());
+
+                // Convert shared_ptr to unique_ptr
+                auto seq_unique = make_unique<Sequence>(*seq);
+
+                // Stvaranje shared_ptr novog vektora za svaki fragment
+                shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(seq_unique, k, true));
+
+                //dodajem u vanjski vektor da bude vidljivo i izvan else bloka
+                real_vectors3.push_back(fragment_distribution_vector);
+                // Pohrana referenci na nove vektore
+                partial_references_to_referent_distribution_vectors.push_back(ref(*fragment_distribution_vector));
+
+                // Dodavanje imena bakterije u vektor imena
+                names_partial_refs.push_back(names[ref_idx] + to_string(start_idx / overlap + 1));
+            }
+        } else {
+            for (uint32_t start_idx = 0; start_idx < data.size(); start_idx += (frag_size - overlap)) {
+                string fragment;
+                if (start_idx + frag_size > data.size()) {
+                    // Ako je kraj fragmenta izvan genoma, uzmi samo ostatak do kraja
+                    fragment = data.substr(start_idx);
+                } else {
+                    fragment = data.substr(start_idx, frag_size);
+                }
+
+                // Simulate creating a Sequence object from the fragment
+                auto seq = make_shared<Sequence>("frag", 4, fragment.c_str(), fragment.size());
+
+                // Convert shared_ptr to unique_ptr
+                auto seq_unique = make_unique<Sequence>(*seq);
+
+                // Stvaranje shared_ptr novog vektora za svaki fragment
+                shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(seq_unique, k, true));
+
+                //dodajem u vanjski vektor da bude vidljivo i izvan else bloka
+                real_vectors3.push_back(fragment_distribution_vector);
+                // Pohrana referenci na nove vektore
+                partial_references_to_referent_distribution_vectors.push_back(ref(*fragment_distribution_vector));
+
+                // Dodavanje imena bakterije u vektor imena
+                names_partial_refs.push_back(names[ref_idx] + to_string(start_idx / overlap + 1));
+            }
+        }
+    }
+
+    //ispis u csv datoteku
+    string filename4 = "PARTIAL_reference_vectors.csv";
+    string absolute_path4 = get_data_directory() + "/" + filename4;
+    write_csv(partial_references_to_referent_distribution_vectors, names_partial_refs, absolute_path4);
+
+    // Nakon što su podaci iz 'refs' vektora obrađeni i više nisu potrebni
+    for (auto& ref_vector : refs) {
+        for (auto& seq : ref_vector) {
+            seq.reset();  // Oslobađa memoriju koju je unique_ptr držao
+        }
+        ref_vector.clear();  // Briše sve unique_ptr iz vektora
+    }
+    refs.clear();  // Briše sve vektore iz vektora vektora
+
+    // Nakon što su podaci iz 'real_vectors3' vektora obrađeni i više nisu potrebni
+    for (auto& vec : real_vectors3) {
+        vec.reset();  // Smanjuje brojač reference i oslobađa memoriju ako je brojač 0
+    }
+    real_vectors3.clear();  // Briše sve shared_ptr iz vektora
+
+
+    // Parsiranje referentnih genoma koristenih u metagenomskom uzorku
+    for (std::string& file : read_files) { //samo dodajem _reference da uzme referenti genom
+        size_t pos = file.find(".fasta");
+        if (pos != std::string::npos) {
+            file.insert(pos, "_reference");
+        }
+    }
+    vector<vector<unique_ptr<Sequence>>> refs_from_sample;
+    for (const auto& genome_file : read_files) {
+        auto ref_genome_parser = bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(data_directory + "/Referent_genomes_for_NO_ERROR_reads/"+ genome_file);
+        auto ref = ref_genome_parser->Parse(-1);
+        refs_from_sample.push_back(move(ref));
+    }
+
+
+    //----parsiranje kreiranje distribucijskih vektora očitanja---------------------------
+
+
     auto fragment_parser =
                 bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(
                     data_directory + "/" + "metagenomic_sample.fasta");
     auto fragments = fragment_parser->Parse(-1); //fragments je vektor unique_ptr<Sequence> objekata
-
-    //----kreiranje distribucijskih vektora očitanja------------------
 
     // Stvaranje vektora referenci
     vector<reference_wrapper<vector<double>>> references_to_fragments_distribution_vectors;
@@ -522,11 +586,6 @@ bool read_references = false, read_reads = false, k_mer = false;
     }
 
     //header csv datoteke
-/*     vector<string> names_frags;
-    for(int i = 1; i <= references_to_fragments_distribution_vectors.size(); i++) {
-        names_frags.push_back("readr" + to_string(i));
-    } */
-    //header csv datoteke
     vector<string> names_frags;
     // Popunjavanje vektora names_frags
     for (size_t i = 0; i < read_counts.size(); ++i) {
@@ -540,11 +599,25 @@ bool read_references = false, read_reads = false, k_mer = false;
     string absolute_path2 = get_data_directory() + "/" + filename2;
     write_csv(references_to_fragments_distribution_vectors, names_frags, absolute_path2);
 
+    // Oslobađanje memorije
+    for (auto& ref_vector : references_to_fragments_distribution_vectors) {
+        ref_vector.get().clear();  // Briše sadržaj svakog vektora
+    }
+    references_to_fragments_distribution_vectors.clear();  // Briše sve reference iz 'references_to_fragments_distribution_vectors'
+
+    for (auto& vec : real_vectors) {
+        vec.reset();  // Smanjuje brojač reference i oslobađa memoriju ako je brojač 0
+    }
+    real_vectors.clear();  // Briše sve shared_ptr iz vektora
+
+
+    for (auto& fragment : fragments) {
+        fragment.reset();  // Oslobađa memoriju koju je unique_ptr držao
+    }
+    fragments.clear();  // Briše sve unique_ptr iz vektora
 
 
     //----kreiranje očitanja bez greške---------------------------
-
-    //vector<int> frags_num = { 100, 91, 82, 106, 119, 97, 78, 111, 144, 70 }; //83 umjesto 82 za k<9 treba napisati
 
 
     vector<reference_wrapper<vector<double>>> references_to_NO_ERROR_fragments_distribution_vectors;
@@ -554,20 +627,19 @@ bool read_references = false, read_reads = false, k_mer = false;
     random_device rd;
     mt19937 gen(rd());
 
-    for (size_t ref_idx = 0; ref_idx < refs.size(); ++ref_idx) {
+    for (size_t ref_idx = 0; ref_idx < refs_from_sample.size(); ++ref_idx) {
         for (int i = 0; i < read_counts[ref_idx]; ++i) {
             int frag_size = frag_sizes[size_index++];
-            int max_start_idx = refs[ref_idx][0]->data_.size() - frag_size;
+            int max_start_idx = refs_from_sample[ref_idx][0]->data_.size() - frag_size;
             uniform_int_distribution<> dis(0, max_start_idx); //iz jednolike razdiobe odabirem brojeve
             int start_idx = dis(gen);
 
-            string fragment = refs[ref_idx][0]->data_.substr(start_idx, frag_size);
-            //cout << "Generated fragment: " << fragment << endl;
+            string fragment = refs_from_sample[ref_idx][0]->data_.substr(start_idx, frag_size);
 
-            // Simulate creating a Sequence object from the fragment
+            // simuliram kreiranje objekta Sequence od fragmenta
             auto seq = make_shared<Sequence>("frag", 4, fragment.c_str(), fragment.size());
 
-            // Convert shared_ptr to unique_ptr
+            // konvertiranje shared_ptr u unique_ptr
             auto seq_unique = make_unique<Sequence>(*seq);
 
             // Stvaranje shared_ptr novog vektora za svaki fragment
@@ -584,6 +656,14 @@ bool read_references = false, read_reads = false, k_mer = false;
     string filename3 = "NO_ERROR_fragments_vectors.csv";
     string absolute_path3 = get_data_directory() + "/" + filename3;
     write_csv(references_to_NO_ERROR_fragments_distribution_vectors, names_frags, absolute_path3);
+
+    // Oslobađanje memorije nakon ispisivanja u CSV datoteku
+    for (auto& vec : real_vectors2) {
+        vec.reset();  // Smanjuje brojač reference i oslobađa memoriju ako je brojač 0
+    }
+    real_vectors2.clear();  // Briše sve shared_ptr iz vektora
+
+    references_to_NO_ERROR_fragments_distribution_vectors.clear();  // Briše sve reference iz vektora
 
 
 
@@ -639,50 +719,6 @@ bool read_references = false, read_reads = false, k_mer = false;
     cout << endl;
     cout << endl;
 
-    //----opis referentnog genoma sa više vektora---------------------------
 
-vector<reference_wrapper<vector<double>>> partial_references_to_referent_distribution_vectors;
-vector<shared_ptr<vector<double>>> real_vectors3;
-vector<string> names_partial_refs;  //header csv datoteke
-
-for (size_t ref_idx = 0; ref_idx < refs.size(); ++ref_idx) {
-    auto data = refs[ref_idx][0]->data_;
-    int frag_size = 500000; // veličina fragmenta
-    int overlap = 250000; // preklapanje
-
-    for (uint32_t start_idx = 0; start_idx < data.size(); start_idx += overlap) {
-        string fragment;
-        if (start_idx + frag_size > data.size()) {
-            // Ako je kraj fragmenta izvan genoma, produži na početak
-            fragment = data.substr(start_idx) + data.substr(0, (start_idx + frag_size) % data.size());
-        } else {
-            fragment = data.substr(start_idx, frag_size);
-        }
-
-        // Simulate creating a Sequence object from the fragment
-        auto seq = make_shared<Sequence>("frag", 4, fragment.c_str(), fragment.size());
-
-        // Convert shared_ptr to unique_ptr
-        auto seq_unique = make_unique<Sequence>(*seq);
-
-        // Stvaranje shared_ptr novog vektora za svaki fragment
-        shared_ptr<vector<double>> fragment_distribution_vector = make_shared<vector<double>>(get_distribution_vector(seq_unique, k, true));
-
-        //dodajem u vanjski vektor da bude vidljivo i izvan else bloka
-        real_vectors3.push_back(fragment_distribution_vector);
-        // Pohrana referenci na nove vektore
-        partial_references_to_referent_distribution_vectors.push_back(ref(*fragment_distribution_vector));
-
-        // Dodavanje imena bakterije u vektor imena
-        names_partial_refs.push_back(names[ref_idx] + to_string(start_idx / overlap + 1));
-    }
-}
-
-//ispis u csv datoteku
-string filename4 = "PARTIAL_reference_vectors.csv";
-string absolute_path4 = get_data_directory() + "/" + filename4;
-write_csv(partial_references_to_referent_distribution_vectors, names_partial_refs, absolute_path4);
-
-    
     return 0;
 }
