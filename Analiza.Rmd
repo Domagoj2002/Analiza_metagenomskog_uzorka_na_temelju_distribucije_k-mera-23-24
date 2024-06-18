@@ -1,0 +1,617 @@
+---
+title: "Analiza metagenomskog uzorka na temelju distribucija k-mera"
+author: "0036540224 DOMAGOJ SVILIČIĆ"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+---
+#Analza metagenomskog uzorka na temelju distribucije k-mera
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##Stupčasti dijagram brojnosti očitanja svakog organizma u kreiranom metagenomskom uzorku
+
+```{r}
+library(ggplot2)
+library(readr)
+# Učitavanje samo zaglavlja CSV datoteke bez automatskog dodavanja brojeva
+column_names <- make.names(colnames(read.csv("fragments_vectors.csv", nrows = 0)), unique=FALSE)
+
+# Uklanjanje brojeva dodanih na kraju imena stupaca (ako ih ima)
+column_names <- gsub("\\.\\d+$", "", column_names)
+column_names
+# Izračunavanje broja pojavljivanja svakog imena
+frags_num <- table(column_names)
+frags_num
+
+# Izdvajanje jedinstvenih imena bez duplikata
+unique_names <- names(frags_num )
+unique_names
+
+frags_num <-as.vector(frags_num)
+frags_num
+# Kreiranje data frame-a za grafikon bez duplikata
+data_for_plot <- data.frame(bacteria = unique_names, number_of_readings = frags_num)
+
+# Učitavanje ggplot2 paketa za crtanje grafikona
+
+# Nacrtati stupčasti dijagram bez duplikata
+ggplot(data_for_plot, aes(x = bacteria, y = number_of_readings)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  theme_minimal() +
+  labs(x = "Bacteria", y = "Number of Readings", title = "Number of Readings per Bacteria") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+```
+##Prikaz najbolje ostvarene kosinusne sličnosti za svako očitanje iz kreiranog uzorka
+```{r}
+library(caret)
+library(tidyverse)
+
+# Učitavanje podataka
+reference_vectors <- read_csv("reference_vectors.csv")
+#fragments_vectors <- read_csv("fragments_vectors.csv")
+
+# Pretvorba podataka u matrice
+reference_matrix <- as.matrix(reference_vectors)
+# Oslobađanje memorije zauzete objektima reference_vectors
+rm(reference_vectors)
+gc()
+fragments_vectors <- read_csv("NO_ERROR_fragments_vectors.csv")
+fragments_matrix <- as.matrix(fragments_vectors)
+#Oslobađanje memorije zauzete objektom fragments_vectors
+rm(fragments_vectors)
+gc()
+
+# Inicijalizacija imena bakterija
+bacteria_names <- colnames(reference_matrix)
+
+# Funkcija za izračunavanje kosinusne sličnosti
+cosine_similarity <- function(a, b) {
+  return((sum(a * b)) / (sqrt(sum(a^2)) * sqrt(sum(b^2))))
+}
+
+# Klasifikacija očitanja i spremanje maksimalnih sličnosti u vektor
+max_similarities <- vector()
+
+for (i in 1:ncol(fragments_matrix)) {
+  similarities <- apply(reference_matrix, 2, cosine_similarity, b = fragments_matrix[, i])
+  max_similarity <- max(similarities)
+  max_similarities <- c(max_similarities, max_similarity)
+}
+
+# Kreiranje dataframea za ggplot
+similarities_df <- data.frame(Index = 1:length(max_similarities), MaxSimilarity = max_similarities)
+
+# Dodavanje stupca 'Color' za boje točkica
+similarities_df$Color <- "blue"
+similarities_df$Color[similarities_df$Index >= 4198 & similarities_df$Index <= 4966] <- "red"
+similarities_df$Color[similarities_df$Index >= 9301] <- "red"
+
+# Vizualizacija distribucije maksimalnih sličnosti pomoću točkastog grafa
+ggplot(similarities_df, aes(x = Index, y = MaxSimilarity, color = Color)) +
+  geom_point(alpha = 0.6) +
+  scale_color_identity() + # Koristimo boje definirane u stupcu 'Color'
+  labs(title = "Distribution of Maximum Cosine Similarities", x = "Index", y = "Cosine Similarity") +
+  theme_minimal()
+
+# Odabir optimalnog praga
+#optimal_threshold <- thresholds[which.max(f1_scores)]
+#print(paste("Optimalni prag je:", optimal_threshold))
+```
+
+
+
+
+##Matrica zabune
+```{r}
+library(tidyverse)
+library(caret)
+library(pheatmap)
+library(data.table)
+
+# Učitavanje podataka
+reference_vectors <- read.csv("reference_vectors.csv", header = TRUE)
+
+# Pretvorba podataka u matrice
+reference_matrix <- as.matrix(reference_vectors)
+
+# Oslobađanje memorije zauzete objektima reference_vectors
+rm(reference_vectors)
+gc()
+
+# Inicijalizacija imena bakterija
+bacteria_names <- colnames(reference_matrix)
+
+# Definicija stvarnih labela
+true_labels <- sub("\\.*\\d*$", "", colnames(read.csv("fragments_vectors.csv", nrows = 1)))
+
+# Funkcija za izračunavanje kosinusne sličnosti
+cosine_similarity <- function(a, b) {
+  return((sum(a * b)) / (sqrt(sum(a^2)) * sqrt(sum(b^2))))
+}
+
+# Funkcija za čitanje CSV datoteke u dijelovima po 500 stupaca
+read_csv_in_chunks <- function(file_path, chunk_size = 500) {
+  num_cols <- ncol(fread(file_path, nrows = 1))
+  chunks <- split(1:num_cols, ceiling(seq_along(1:num_cols) / chunk_size))
+  
+  predicted_labels <- vector()
+  
+  for (chunk in chunks) {
+    fragments_vectors <- fread(file_path, select = chunk)
+    fragments_matrix <- as.matrix(fragments_vectors)
+    
+    for (i in 1:ncol(fragments_matrix)) {
+      similarities <- apply(reference_matrix, 2, cosine_similarity, b = fragments_matrix[, i])
+      max_similarity <- max(similarities)
+      
+      if (max_similarity >= 0.3) {
+        predicted_labels <- c(predicted_labels, bacteria_names[which.max(similarities)])
+      } else {
+        predicted_labels <- c(predicted_labels, NA)
+      }
+    }
+    
+    # Oslobađanje memorije zauzete fragment matrix jer više nije potrebna
+    rm(fragments_matrix, fragments_vectors)
+    gc()
+  }
+  
+  return(predicted_labels)
+}
+
+# Čitanje i obrada fragment_vectors.csv u dijelovima
+predicted_labels <- read_csv_in_chunks("fragments_vectors.csv")
+
+# Kreiranje tablice konfuzije
+confusion_matrix <- table(factor(true_labels, levels = bacteria_names), factor(predicted_labels, levels = bacteria_names))
+
+# Konverzija tablice konfuzije u matricu
+confusion_matrix_mat <- as.matrix(confusion_matrix)
+
+# Izračunavanje ukupnog broja klasificiranih očitanja
+total_classified_reads <- sum(confusion_matrix_mat)
+
+# Prikaz tablice konfuzije s postotcima kao toplinske karte
+pheatmap(confusion_matrix, 
+         color = colorRampPalette(c("white", "limegreen"))(100),
+         display_numbers = TRUE,
+         number_format = "%d",
+         number_color = "black",
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         fontsize_number = 12,
+         border_color = "black",
+         main = "Confusion Matrix",
+         labels_row = bacteria_names,
+         labels_col = bacteria_names,
+         angle_col = 45 # rotacija oznaka stupaca
+)
+
+# Dodavanje oznaka za osi
+grid::grid.text("true label", x = 0.96, y = 0.15, rot = 90, gp = grid::gpar(fontsize = 10, fontface = "bold"))
+grid::grid.text("predicted label", x = 0.88, y = 0.06, gp = grid::gpar(fontsize = 10, fontface = "bold"))
+
+# Računanje precision, recall i f1-score za svaku klasu
+precision <- diag(confusion_matrix_mat) / rowSums(confusion_matrix_mat)
+recall <- diag(confusion_matrix_mat) / colSums(confusion_matrix_mat)
+f1_score <- 2 * precision * recall / (precision + recall)
+
+# Broj neklasificiranih očitanja
+num_unclassified <- sum(is.na(predicted_labels))
+total_reads <- length(predicted_labels)
+unclassified_ratio <- paste(num_unclassified, "/", total_reads, sep = "")
+
+# Računanje ukupnih (mikroprosječnih) precision, recall i f1-score
+true_positives <- sum(diag(confusion_matrix_mat))
+false_positives <- sum(colSums(confusion_matrix_mat)) - true_positives
+false_negatives <- sum(rowSums(confusion_matrix_mat)) - true_positives
+
+overall_precision <- true_positives / (true_positives + false_positives)
+overall_recall <- true_positives / (true_positives + false_negatives)
+overall_f1_score <- 2 * (overall_precision * overall_recall) / (overall_precision + overall_recall)
+
+cat("Mikroprosječne vrijednosti:\n")
+cat("\navg (micro-averaging):\n")
+cat(overall_f1_score)
+cat("\n")
+cat("--------------------")
+
+# Računanje makroprosječnih precision, recall i f1-score
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+
+# Kreiranje zajedničke tablice
+metrics_df <- data.frame(Bacteria = unique(bacteria_names), Precision = precision, Recall = recall, F1_Score = f1_score)
+
+# Ispis rezultata
+print(metrics_df)
+
+cat("\nNumber of unclassified reads (a/b): ")
+cat(unclassified_ratio)
+cat("\n")
+
+cat("Makroprosječne vrijednosti:\n")
+cat("\nOverall Precision:\n")
+cat(overall_precision)
+
+cat("\nOverall Recall:\n")
+cat(overall_recall)
+
+cat("\nOverall F1-Score:\n")
+cat(overall_f1_score)
+
+
+```
+
+
+
+##Matrica zabune (udio klasificiranih očitanja izražen u postotcima)
+```{r}
+library(tidyverse)
+library(caret)
+library(pheatmap)
+library(data.table)
+
+# Učitavanje podataka
+reference_vectors <- read.csv("reference_vectors.csv", header = TRUE)
+
+# Pretvorba podataka u matrice
+reference_matrix <- as.matrix(reference_vectors)
+
+# Oslobađanje memorije zauzete objektima reference_vectors
+rm(reference_vectors)
+gc()
+
+# Inicijalizacija imena bakterija
+bacteria_names <- colnames(reference_matrix)
+
+# Definicija stvarnih labela
+true_labels <- sub("\\.*\\d*$", "", colnames(read.csv("fragments_vectors.csv", nrows = 1)))
+
+# Funkcija za izračunavanje kosinusne sličnosti
+cosine_similarity <- function(a, b) {
+  return((sum(a * b)) / (sqrt(sum(a^2)) * sqrt(sum(b^2))))
+}
+
+# Funkcija za čitanje CSV datoteke u dijelovima po 500 stupaca
+read_csv_in_chunks <- function(file_path, chunk_size = 500) {
+  num_cols <- ncol(fread(file_path, nrows = 1))
+  chunks <- split(1:num_cols, ceiling(seq_along(1:num_cols) / chunk_size))
+  
+  predicted_labels <- vector()
+  
+  for (chunk in chunks) {
+    fragments_vectors <- fread(file_path, select = chunk)
+    fragments_matrix <- as.matrix(fragments_vectors)
+    
+    for (i in 1:ncol(fragments_matrix)) {
+      similarities <- apply(reference_matrix, 2, cosine_similarity, b = fragments_matrix[, i])
+      max_similarity <- max(similarities)
+      
+      if (max_similarity >= 0.3) {
+        predicted_labels <- c(predicted_labels, bacteria_names[which.max(similarities)])
+      } else {
+        predicted_labels <- c(predicted_labels, NA)
+      }
+    }
+    
+    # Oslobađanje memorije zauzete fragment matrix jer više nije potrebna
+    rm(fragments_matrix, fragments_vectors)
+    gc()
+  }
+  
+  return(predicted_labels)
+}
+
+# Čitanje i obrada fragment_vectors.csv u dijelovima
+predicted_labels <- read_csv_in_chunks("fragments_vectors.csv")
+# Kreiranje tablice konfuzije
+confusion_matrix <- table(factor(true_labels, levels = bacteria_names), factor(predicted_labels, levels = bacteria_names))
+
+# Konverzija tablice konfuzije u matricu
+confusion_matrix_mat <- as.matrix(confusion_matrix)
+
+# Oslobađanje memorije zauzete confusion_matrix jer sada imamo matricu
+rm(confusion_matrix)
+gc()
+
+# Izračunavanje postotaka za svaku bakteriju u odnosu na broj očitanja te bakterije
+confusion_matrix_percentage <- apply(confusion_matrix_mat, 1, function(x) x / sum(x) * 100)
+confusion_matrix_percentage <- t(confusion_matrix_percentage)
+
+# Funkcija za prilagodbu formata brojeva
+format_percentage <- function(x) {
+  formatted <- ifelse(x == 0, "", sprintf("%.2f%%", x))
+  matrix(formatted, nrow = nrow(x), ncol = ncol(x), dimnames = dimnames(x))
+}
+
+# Formatiranje postotaka
+formatted_percentages <- format_percentage(confusion_matrix_percentage)
+
+# Prikaz tablice konfuzije s postotcima kao toplinske karte
+pheatmap(confusion_matrix_percentage, 
+         color = colorRampPalette(c("white", "limegreen"))(100),
+         display_numbers = formatted_percentages,
+         number_color = "black",
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         fontsize_number = 11,
+         border_color = "black",
+         main = "Confusion Matrix (Percentage)",
+         labels_row = bacteria_names,
+         labels_col = bacteria_names,
+         angle_col = 45 # rotacija oznaka stupaca
+)
+
+# Dodavanje oznaka za osi
+grid::grid.text("true label", x = 0.96, y = 0.15, rot = 90, gp = grid::gpar(fontsize = 10, fontface = "bold"))
+grid::grid.text("predicted label", x = 0.88, y = 0.06, gp = grid::gpar(fontsize = 10, fontface = "bold"))
+
+# Računanje precision, recall i f1-score za svaku klasu
+precision <- diag(confusion_matrix_mat) / rowSums(confusion_matrix_mat)
+recall <- diag(confusion_matrix_mat) / colSums(confusion_matrix_mat)
+f1_score <- 2 * precision * recall / (precision + recall)
+
+# Broj neklasificiranih očitanja
+num_unclassified <- sum(is.na(predicted_labels))
+total_reads <- length(predicted_labels)
+unclassified_ratio <- paste(num_unclassified, "/", total_reads, sep = "")
+
+# Računanje ukupnih (mikroprosječnih) precision, recall i f1-score
+true_positives <- sum(diag(confusion_matrix_mat))
+false_positives <- sum(colSums(confusion_matrix_mat)) - true_positives
+false_negatives <- sum(rowSums(confusion_matrix_mat)) - true_positives
+
+overall_precision <- true_positives / (true_positives + false_positives)
+overall_recall <- true_positives / (true_positives + false_negatives)
+overall_f1_score <- 2 * (overall_precision * overall_recall) / (overall_precision + overall_recall)
+
+cat("Mikroprosječne vrijednosti:\n")
+cat("\navg (micro-averaging):\n")
+cat(overall_f1_score)
+cat("\n")
+cat("--------------------")
+
+# Računanje makroprosječnih precision, recall i f1-score
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+
+# Kreiranje zajedničke tablice
+metrics_df <- data.frame(Bacteria = unique(bacteria_names), Precision = precision, Recall = recall, F1_Score = f1_score)
+
+# Ispis rezultata
+print(metrics_df)
+
+cat("\nNumber of unclassified reads (a/b): ")
+cat(unclassified_ratio)
+cat("\n")
+
+cat("Makroprosječne vrijednosti:\n")
+cat("\nOverall Precision:\n")
+cat(overall_precision)
+
+cat("\nOverall Recall:\n")
+cat(overall_recall)
+
+cat("\nOverall F1-Score:\n")
+cat(overall_f1_score)
+
+
+
+
+```
+##Matrica sličnosti između referentnih genoma na temelju kosinusne sličnosti
+```{r}
+# Učitavanje potrebnih paketa
+library(tidyverse)
+library(pheatmap)
+
+# Učitavanje podataka
+reference_vectors <- read.csv("reference_vectors.csv", header = TRUE)
+
+# Izdvajanje naziva bakterija
+bacteria_names <- colnames(reference_vectors)
+
+# Izračunavanje kosinusne sličnosti
+cosine_similarity <- function(a, b) {
+  return(sum(a * b) / (sqrt(sum(a^2)) * sqrt(sum(b^2))))
+}
+
+# Izračunavanje matrice sličnosti
+similarity_matrix <- matrix(NA, nrow = ncol(reference_vectors), ncol = ncol(reference_vectors))
+for (i in 1:ncol(reference_vectors)) {
+  for (j in 1:ncol(reference_vectors)) {
+    similarity_matrix[i, j] <- cosine_similarity(reference_vectors[, i], reference_vectors[, j])
+  }
+}
+
+# Postavljanje dijagonale na 1
+diag(similarity_matrix) <- 1
+
+# Eksponencijalna transformacija matrice sličnosti
+exp_similarity_matrix <-(exp(similarity_matrix) - 1)^2
+
+# Prikaz eksponencijalno transformirane matrice sličnosti kao toplinske karte
+pheatmap(exp_similarity_matrix,
+         color = colorRampPalette(c("white", "black"))(100),
+         fontsize_number = 12,
+         main = "Exp-transformed Cosine Similarity Matrix",
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         labels_row = bacteria_names,
+         labels_col = bacteria_names,
+         annotation_row = rownames(exp_similarity_matrix),
+         angle_col = 45
+         )
+
+
+
+
+
+```
+##Matrica sličnosti za referentne genome predstavljene s više distribucijskih vektora
+```{r}
+library(tidyverse)
+library(caret)
+library(pheatmap)
+library(data.table)
+
+# Učitavanje podataka
+reference_vectors <- read.csv("PARTIAL_reference_vectors.csv", header = TRUE)
+
+# Pretvorba podataka u matrice
+reference_matrix <- as.matrix(reference_vectors)
+
+# Oslobađanje memorije zauzete objektima reference_vectors
+rm(reference_vectors)
+gc()
+
+# Inicijalizacija imena bakterija
+bacteria_names <- gsub("\\d+$", "", colnames(reference_matrix)) # uklanjanje brojeva na kraju imena
+
+# Uklanjanje duplikata uz očuvanje redoslijeda
+unique_bacteria_names <- bacteria_names[!duplicated(bacteria_names)]
+
+# Definicija stvarnih labela
+true_labels <- sub("\\.*\\d*$", "", colnames(read.csv("fragments_vectors.csv", nrows = 1)))
+
+# Funkcija za izračunavanje kosinusne sličnosti
+cosine_similarity <- function(a, b) {
+  return((sum(a * b)) / (sqrt(sum(a^2)) * sqrt(sum(b^2))))
+}
+
+# Funkcija za čitanje CSV datoteke u dijelovima po 500 stupaca
+read_csv_in_chunks <- function(file_path, chunk_size = 500) {
+  num_cols <- ncol(fread(file_path, nrows = 1))
+  chunks <- split(1:num_cols, ceiling(seq_along(1:num_cols) / chunk_size))
+  
+  predicted_labels <- vector()
+  
+  for (chunk in chunks) {
+    fragments_vectors <- fread(file_path, select = chunk)
+    fragments_matrix <- as.matrix(fragments_vectors)
+    
+    for (i in 1:ncol(fragments_matrix)) {
+      similarities <- apply(reference_matrix, 2, cosine_similarity, b = fragments_matrix[, i])
+      max_similarity <- max(similarities)
+      
+      if (max_similarity >= 0.3) {
+        predicted_labels <- c(predicted_labels, gsub("\\d+$", "", colnames(reference_matrix)[which.max(similarities)])) # uklanjanje brojeva na kraju imena
+      } else {
+        predicted_labels <- c(predicted_labels, NA)
+      }
+    }
+    
+    # Oslobađanje memorije zauzete fragment matrix jer više nije potrebna
+    rm(fragments_matrix, fragments_vectors)
+    gc()
+  }
+  
+  return(predicted_labels)
+}
+
+# Čitanje i obrada NO_ERROR_fragments_vectors.csv u dijelovima
+predicted_labels <- read_csv_in_chunks("fragments_vectors.csv")
+
+# Kreiranje tablice konfuzije
+confusion_matrix <- table(factor(true_labels, levels = unique_bacteria_names), factor(predicted_labels, levels = unique_bacteria_names))
+
+# Konverzija tablice konfuzije u matricu
+confusion_matrix_mat <- as.matrix(confusion_matrix)
+
+# Oslobađanje memorije zauzete confusion_matrix jer sada imamo matricu
+rm(confusion_matrix)
+gc()
+
+# Izračunavanje postotaka za svaku bakteriju u odnosu na broj očitanja te bakterije
+confusion_matrix_percentage <- apply(confusion_matrix_mat, 1, function(x) x / sum(x) * 100)
+confusion_matrix_percentage <- t(confusion_matrix_percentage)
+
+# Funkcija za prilagodbu formata brojeva
+format_percentage <- function(x) {
+  formatted <- ifelse(x == 0, "", sprintf("%.2f%%", x))
+  matrix(formatted, nrow = nrow(x), ncol = ncol(x), dimnames = dimnames(x))
+}
+
+# Formatiranje postotaka
+formatted_percentages <- format_percentage(confusion_matrix_percentage)
+
+# Prikaz tablice konfuzije s postotcima kao toplinske karte
+pheatmap(confusion_matrix_percentage, 
+         color = colorRampPalette(c("white", "limegreen"))(100),
+         display_numbers = formatted_percentages,
+         number_color = "black",
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         fontsize_number = 11,
+         border_color = "black",
+         main = "Confusion Matrix (Percentage)",
+         labels_row = unique_bacteria_names,
+         labels_col = unique_bacteria_names,
+         angle_col = 45 # rotacija oznaka stupaca
+)
+
+# Dodavanje oznaka za osi
+grid::grid.text("true label", x = 0.96, y = 0.15, rot = 90, gp = grid::gpar(fontsize = 10, fontface = "bold"))
+grid::grid.text("predicted label", x = 0.88, y = 0.06, gp = grid::gpar(fontsize = 10, fontface = "bold"))
+
+# Računanje precision, recall i f1-score za svaku klasu
+precision <- diag(confusion_matrix_mat) / rowSums(confusion_matrix_mat)
+recall <- diag(confusion_matrix_mat) / colSums(confusion_matrix_mat)
+f1_score <- 2 * precision * recall / (precision + recall)
+
+# Broj neklasificiranih očitanja
+num_unclassified <- sum(is.na(predicted_labels))
+total_reads <- length(predicted_labels)
+unclassified_ratio <- paste(num_unclassified, "/", total_reads, sep = "")
+
+# Računanje ukupnih (mikroprosječnih) precision, recall i f1-score
+true_positives <- sum(diag(confusion_matrix_mat))
+false_positives <- sum(colSums(confusion_matrix_mat)) - true_positives
+false_negatives <- sum(rowSums(confusion_matrix_mat)) - true_positives
+
+overall_precision <- true_positives / (true_positives + false_positives)
+overall_recall <- true_positives / (true_positives + false_negatives)
+overall_f1_score <- 2 * (overall_precision * overall_recall) / (overall_precision + overall_recall)
+
+cat("Mikroprosječne vrijednosti:\n")
+cat("\navg (micro-averaging):\n")
+cat(overall_f1_score)
+cat("\n")
+cat("--------------------")
+
+# Računanje makroprosječnih precision, recall i f1-score
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+
+# Kreiranje zajedničke tablice
+metrics_df <- data.frame(Bacteria = unique_bacteria_names, Precision = precision, Recall = recall, F1_Score = f1_score)
+
+# Ispis rezultata
+print(metrics_df)
+
+cat("\nNumber of unclassified reads (a/b): ")
+cat(unclassified_ratio)
+cat("\n")
+
+cat("Makroprosječne vrijednosti:\n")
+cat("\nOverall Precision:\n")
+cat(overall_precision)
+
+cat("\nOverall Recall:\n")
+cat(overall_recall)
+
+cat("\nOverall F1-Score:\n")
+cat(overall_f1_score)
+
+```
+
