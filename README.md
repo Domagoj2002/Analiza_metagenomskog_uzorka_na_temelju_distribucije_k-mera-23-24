@@ -22,5 +22,5 @@ Pokretanje programske implementacije sastoji se od navigiranja do direktorija **
 cmake .. && make && cd build && ./Analiza_metagenomskog_uzorka_na_temelju_distribucije_k-mera-23-24
 ```
 
-U direktoriju data će se nakon pokretanja stvoriti metagenomic_sample.fasta datoteka kreiranog metagenomskog uzorka, csv datoteke i pdf izveštaj provedene analize.
+U direktoriju data će se nakon pokretanja stvoriti metagenomic_sample.fasta datoteka kreiranog metagenomskog uzorka, csv datoteke i pdf izvještaj provedene analize.
 
