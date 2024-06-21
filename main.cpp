@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <random>
 #include <functional> 
+#include <cstdlib>
 #include "bioparser/fasta_parser.hpp" 
 
 
@@ -248,9 +249,7 @@ void create_metagenomic_sample(const vector<string>& read_files,
     if (!outfile.is_open()) {
     throw runtime_error("Ne mogu otvoriti datoteku: " + output_file);
 }
-    for (size_t i = 0; i < read_files.size(); ++i) {      
-         std::cout << read_files[i]<< endl;
-    }
+
     for (size_t i = 0; i < read_files.size(); ++i) { 
  
         string input_file = read_files[i];
@@ -399,12 +398,9 @@ int main(){
     }
 
     // Kreiranje metagenomskog uzorka ako datoteka ne postoji
-    cout << "Metagenoski uzorak stvoren je iz datoteka:"<< endl;
+
     string metagenomic_sample_file = data_directory + "/" + "metagenomic_sample.fasta";
     if (!fs::exists(metagenomic_sample_file)) {
-        for (size_t i = 0; i < read_files.size(); ++i) {      
-         cout << read_files[i]<< endl;
-    }
         create_metagenomic_sample(read_files, read_counts, metagenomic_sample_file, data_directory);
     } else {
         cout << "Datoteka metagenomic_sample.fasta već postoji. Preskačem stvaranje nove datoteke." << endl;
@@ -719,6 +715,9 @@ int main(){
     cout << endl;
     cout << endl;
 
+
+    // Naredba za izvršavanje R skripte koja će generirati PDF izvještaj
+    system("cd .. && cd .. && Rscript -e \"rmarkdown::render('Analiza.Rmd', output_file='data/Analiza.pdf')\"");
 
     return 0;
 }

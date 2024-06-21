@@ -1,35 +1,33 @@
 ---
 title: "Analiza metagenomskog uzorka na temelju distribucija k-mera"
-author: "0036540224 DOMAGOJ SVILIČIĆ"
+author: "DOMAGOJ SVILIČIĆ"
 date: "`r Sys.Date()`"
 output:
+  pdf_document: default
   html_document: default
 ---
-#Analza metagenomskog uzorka na temelju distribucije k-mera
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-##Stupčasti dijagram brojnosti očitanja svakog organizma u kreiranom metagenomskom uzorku
 
-```{r}
+# Stupčasti dijagram brojnosti očitanja svakog organizma u kreiranom metagenomskom uzorku
+
+```{r, results='hide'}
 library(ggplot2)
 library(readr)
 # Učitavanje samo zaglavlja CSV datoteke bez automatskog dodavanja brojeva
-column_names <- make.names(colnames(read.csv("fragments_vectors.csv", nrows = 0)), unique=FALSE)
+column_names <- make.names(colnames(read.csv("data/fragments_vectors.csv", nrows = 0)), unique=FALSE)
 
 # Uklanjanje brojeva dodanih na kraju imena stupaca (ako ih ima)
 column_names <- gsub("\\.\\d+$", "", column_names)
-column_names
+#column_names
 # Izračunavanje broja pojavljivanja svakog imena
 frags_num <- table(column_names)
-frags_num
+#frags_num
 
 # Izdvajanje jedinstvenih imena bez duplikata
 unique_names <- names(frags_num )
-unique_names
+#unique_names
 
 frags_num <-as.vector(frags_num)
-frags_num
+#frags_num
 # Kreiranje data frame-a za grafikon bez duplikata
 data_for_plot <- data.frame(bacteria = unique_names, number_of_readings = frags_num)
 
@@ -47,50 +45,76 @@ ggplot(data_for_plot, aes(x = bacteria, y = number_of_readings)) +
 
 
 ```
-##Prikaz najbolje ostvarene kosinusne sličnosti za svako očitanje iz kreiranog uzorka
-```{r}
+
+
+
+\newpage
+# Prikaz najbolje ostvarene kosinusne sličnosti za svako očitanje iz kreiranog uzorka
+```{r, results='hide', message=FALSE}
 library(caret)
 library(tidyverse)
+library(data.table)
 
 # Učitavanje podataka
-reference_vectors <- read_csv("reference_vectors.csv")
-#fragments_vectors <- read_csv("fragments_vectors.csv")
-
-# Pretvorba podataka u matrice
+reference_vectors <- read_csv("data/reference_vectors.csv")
 reference_matrix <- as.matrix(reference_vectors)
-# Oslobađanje memorije zauzete objektima reference_vectors
+bacteria_names <- colnames(reference_matrix)
+
+# Oslobađanje memorije zauzete objektom reference_vectors
 rm(reference_vectors)
 gc()
-fragments_vectors <- read_csv("NO_ERROR_fragments_vectors.csv")
-fragments_matrix <- as.matrix(fragments_vectors)
-#Oslobađanje memorije zauzete objektom fragments_vectors
-rm(fragments_vectors)
-gc()
-
-# Inicijalizacija imena bakterija
-bacteria_names <- colnames(reference_matrix)
 
 # Funkcija za izračunavanje kosinusne sličnosti
 cosine_similarity <- function(a, b) {
   return((sum(a * b)) / (sqrt(sum(a^2)) * sqrt(sum(b^2))))
 }
 
-# Klasifikacija očitanja i spremanje maksimalnih sličnosti u vektor
-max_similarities <- vector()
-
-for (i in 1:ncol(fragments_matrix)) {
-  similarities <- apply(reference_matrix, 2, cosine_similarity, b = fragments_matrix[, i])
-  max_similarity <- max(similarities)
-  max_similarities <- c(max_similarities, max_similarity)
+# Funkcija za čitanje CSV datoteke u dijelovima po 500 stupaca
+read_csv_in_chunks <- function(file_path, chunk_size = 500) {
+  num_cols <- ncol(fread(file_path, nrows = 1))
+  chunks <- split(1:num_cols, ceiling(seq_along(1:num_cols) / chunk_size))
+  
+  max_similarities <- vector()
+  
+  for (chunk in chunks) {
+    fragments_vectors <- fread(file_path, select = chunk)
+    fragments_matrix <- as.matrix(fragments_vectors)
+    
+    for (i in 1:ncol(fragments_matrix)) {
+      similarities <- apply(reference_matrix, 2, cosine_similarity, b = fragments_matrix[, i])
+      max_similarity <- max(similarities)
+      max_similarities <- c(max_similarities, max_similarity)
+    }
+    
+    # Oslobađanje memorije zauzete fragment matrix jer više nije potrebna
+    rm(fragments_matrix, fragments_vectors)
+    gc()
+  }
+  
+  return(max_similarities)
 }
+
+# Učitavanje samo zaglavlja CSV datoteke bez automatskog dodavanja brojeva
+column_names <- make.names(colnames(read.csv("data/fragments_vectors.csv", nrows = 0)), unique=FALSE)
+
+# Uklanjanje brojeva dodanih na kraju imena stupaca (ako ih ima)
+column_names <- gsub("\\.\\d+$", "", column_names)
+
+# Dobivanje imena stupaca iz reference_vectors.csv
+reference_column_names <- colnames(read.csv("data/reference_vectors.csv", nrows = 0))
+
+# Pronalaženje indeksa stupaca koji nisu u reference_column_names
+red_indices <- which(!column_names %in% reference_column_names)
+
+# Čitanje i obrada podataka u chunkovima
+max_similarities <- read_csv_in_chunks("data/NO_ERROR_fragments_vectors.csv")
 
 # Kreiranje dataframea za ggplot
 similarities_df <- data.frame(Index = 1:length(max_similarities), MaxSimilarity = max_similarities)
 
 # Dodavanje stupca 'Color' za boje točkica
 similarities_df$Color <- "blue"
-similarities_df$Color[similarities_df$Index >= 4198 & similarities_df$Index <= 4966] <- "red"
-similarities_df$Color[similarities_df$Index >= 9301] <- "red"
+similarities_df$Color[similarities_df$Index %in% red_indices] <- "red"
 
 # Vizualizacija distribucije maksimalnih sličnosti pomoću točkastog grafa
 ggplot(similarities_df, aes(x = Index, y = MaxSimilarity, color = Color)) +
@@ -98,16 +122,12 @@ ggplot(similarities_df, aes(x = Index, y = MaxSimilarity, color = Color)) +
   scale_color_identity() + # Koristimo boje definirane u stupcu 'Color'
   labs(title = "Distribution of Maximum Cosine Similarities", x = "Index", y = "Cosine Similarity") +
   theme_minimal()
-
-# Odabir optimalnog praga
-#optimal_threshold <- thresholds[which.max(f1_scores)]
-#print(paste("Optimalni prag je:", optimal_threshold))
 ```
 
 
 
-
-##Matrica zabune
+\newpage
+# Matrica zabune
 ```{r}
 library(tidyverse)
 library(caret)
@@ -115,7 +135,7 @@ library(pheatmap)
 library(data.table)
 
 # Učitavanje podataka
-reference_vectors <- read.csv("reference_vectors.csv", header = TRUE)
+reference_vectors <- read.csv("data/reference_vectors.csv", header = TRUE)
 
 # Pretvorba podataka u matrice
 reference_matrix <- as.matrix(reference_vectors)
@@ -128,7 +148,7 @@ gc()
 bacteria_names <- colnames(reference_matrix)
 
 # Definicija stvarnih labela
-true_labels <- sub("\\.*\\d*$", "", colnames(read.csv("fragments_vectors.csv", nrows = 1)))
+true_labels <- sub("\\.*\\d*$", "", colnames(read.csv("data/fragments_vectors.csv", nrows = 1)))
 
 # Funkcija za izračunavanje kosinusne sličnosti
 cosine_similarity <- function(a, b) {
@@ -166,7 +186,7 @@ read_csv_in_chunks <- function(file_path, chunk_size = 500) {
 }
 
 # Čitanje i obrada fragment_vectors.csv u dijelovima
-predicted_labels <- read_csv_in_chunks("fragments_vectors.csv")
+predicted_labels <- read_csv_in_chunks("data/fragments_vectors.csv")
 
 # Kreiranje tablice konfuzije
 confusion_matrix <- table(factor(true_labels, levels = bacteria_names), factor(predicted_labels, levels = bacteria_names))
@@ -251,8 +271,8 @@ cat(overall_f1_score)
 ```
 
 
-
-##Matrica zabune (udio klasificiranih očitanja izražen u postotcima)
+\newpage
+# Matrica zabune (udio klasificiranih očitanja izražen u postotcima)
 ```{r}
 library(tidyverse)
 library(caret)
@@ -260,7 +280,7 @@ library(pheatmap)
 library(data.table)
 
 # Učitavanje podataka
-reference_vectors <- read.csv("reference_vectors.csv", header = TRUE)
+reference_vectors <- read.csv("data/reference_vectors.csv", header = TRUE)
 
 # Pretvorba podataka u matrice
 reference_matrix <- as.matrix(reference_vectors)
@@ -273,7 +293,7 @@ gc()
 bacteria_names <- colnames(reference_matrix)
 
 # Definicija stvarnih labela
-true_labels <- sub("\\.*\\d*$", "", colnames(read.csv("fragments_vectors.csv", nrows = 1)))
+true_labels <- sub("\\.*\\d*$", "", colnames(read.csv("data/fragments_vectors.csv", nrows = 1)))
 
 # Funkcija za izračunavanje kosinusne sličnosti
 cosine_similarity <- function(a, b) {
@@ -311,7 +331,7 @@ read_csv_in_chunks <- function(file_path, chunk_size = 500) {
 }
 
 # Čitanje i obrada fragment_vectors.csv u dijelovima
-predicted_labels <- read_csv_in_chunks("fragments_vectors.csv")
+predicted_labels <- read_csv_in_chunks("data/fragments_vectors.csv")
 # Kreiranje tablice konfuzije
 confusion_matrix <- table(factor(true_labels, levels = bacteria_names), factor(predicted_labels, levels = bacteria_names))
 
@@ -408,14 +428,17 @@ cat(overall_f1_score)
 
 
 ```
-##Matrica sličnosti između referentnih genoma na temelju kosinusne sličnosti
+
+
+\newpage
+# Matrica sličnosti između referentnih genoma na temelju kosinusne sličnosti
 ```{r}
 # Učitavanje potrebnih paketa
 library(tidyverse)
 library(pheatmap)
 
 # Učitavanje podataka
-reference_vectors <- read.csv("reference_vectors.csv", header = TRUE)
+reference_vectors <- read.csv("data/reference_vectors.csv", header = TRUE)
 
 # Izdvajanje naziva bakterija
 bacteria_names <- colnames(reference_vectors)
@@ -457,7 +480,11 @@ pheatmap(exp_similarity_matrix,
 
 
 ```
-##Matrica sličnosti za referentne genome predstavljene s više distribucijskih vektora
+
+
+
+\newpage
+# Matrica sličnosti za referentne genome predstavljene s više distribucijskih vektora
 ```{r}
 library(tidyverse)
 library(caret)
@@ -465,7 +492,7 @@ library(pheatmap)
 library(data.table)
 
 # Učitavanje podataka
-reference_vectors <- read.csv("PARTIAL_reference_vectors.csv", header = TRUE)
+reference_vectors <- read.csv("data/PARTIAL_reference_vectors.csv", header = TRUE)
 
 # Pretvorba podataka u matrice
 reference_matrix <- as.matrix(reference_vectors)
@@ -481,7 +508,7 @@ bacteria_names <- gsub("\\d+$", "", colnames(reference_matrix)) # uklanjanje bro
 unique_bacteria_names <- bacteria_names[!duplicated(bacteria_names)]
 
 # Definicija stvarnih labela
-true_labels <- sub("\\.*\\d*$", "", colnames(read.csv("fragments_vectors.csv", nrows = 1)))
+true_labels <- sub("\\.*\\d*$", "", colnames(read.csv("data/fragments_vectors.csv", nrows = 1)))
 
 # Funkcija za izračunavanje kosinusne sličnosti
 cosine_similarity <- function(a, b) {
@@ -519,7 +546,7 @@ read_csv_in_chunks <- function(file_path, chunk_size = 500) {
 }
 
 # Čitanje i obrada NO_ERROR_fragments_vectors.csv u dijelovima
-predicted_labels <- read_csv_in_chunks("fragments_vectors.csv")
+predicted_labels <- read_csv_in_chunks("data/fragments_vectors.csv")
 
 # Kreiranje tablice konfuzije
 confusion_matrix <- table(factor(true_labels, levels = unique_bacteria_names), factor(predicted_labels, levels = unique_bacteria_names))
